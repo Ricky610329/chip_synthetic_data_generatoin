@@ -1,0 +1,59 @@
+# --- Generation Task Settings ---
+run_settings:
+  num_samples_to_generate: 100 # 要產生幾個樣本
+  output_directory: "dataset"    # 儲存 JSON 檔案的資料夾
+
+# --- Base Parameters (Fixed values) ---
+base_params:
+  CANVAS_WIDTH: 1000
+  CANVAS_HEIGHT: 1000
+  MAX_ITERATIONS: 10000
+  GROWTH_STEP: 2
+  STAGNATION_LIMIT: 300
+  SHAKE_TRIGGER_THRESHOLD: 30
+  ROLLBACK_STEPS: 5
+  SHAKE_ITERATIONS: 15
+  SHAKE_STRENGTH: 1.0
+  INFILL_TRIGGER_AFTER_N_SHAKES: 5
+  INFILL_COMPONENT_COUNT: 10
+  INFILL_GRID_DENSITY: 50
+  INFILL_MAX_TRIGGERS: 3
+  PIN_DENSITY_K: 0.01
+  EDGE_P_MAX: 0.6
+  MAX_WIRELENGTH_LIMIT: 500
+
+# --- Parameters to Randomize ---
+# 每一輪生成都會從以下規則中隨機取值
+randomize_params:
+  NUM_RECTANGLES:
+    type: "randint"   # 整數亂數
+    low: 100
+    high: 250
+  TARGET_DENSITY:
+    type: "uniform"   # 浮點數亂數
+    low: 0.75
+    high: 0.85
+  MAX_ASPECT_RATIO:
+    type: "uniform"
+    low: 3.0
+    high: 6.0
+  MACRO_RATIO:
+    type: "uniform"
+    low: 0.05
+    high: 0.20
+  MACRO_GROWTH_PROB_RANGE:
+    type: "uniform_pair" # 一對浮點數亂數
+    low: [0.7, 0.8]
+    high: [0.9, 0.98]
+  STD_CELL_GROWTH_PROB_RANGE:
+    type: "uniform_pair"
+    low: [0.1, 0.2]
+    high: [0.4, 0.5]
+  RENT_EXPONENT_P:
+    type: "uniform"
+    low: 0.55
+    high: 0.7
+  EDGE_DECAY_RATE:
+    type: "uniform"
+    low: 0.003
+    high: 0.008
