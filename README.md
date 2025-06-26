@@ -111,3 +111,7 @@ edge 的指向是雙向的
         python format_for_ml.py dataset/ formatted_dataset/
         ```
     -   程式會讀取 `dataset/` 中的所有 JSON 檔案，將它們轉換為 ML-ready 格式，並將新檔案儲存到 `formatted_dataset/` 中。
+
+## Demo
+
+![image](layout_generation_demo.gif)
