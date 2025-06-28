@@ -1,8 +1,4 @@
-### 注意
-
-edge 的指向是雙向的
-
-# 專案說明文件 (note.md)
+# Chip Synthetic Data Generation
 
 ## 專案總覽
 
@@ -82,7 +78,7 @@ edge 的指向是雙向的
 -   **格式轉換**: 將每個 layout JSON 轉換為包含以下鍵的字典：
     -   `p`: **節點特徵 (Node Features)**。每個節點（元件）的正規化寬和高。
     -   `target`: **目標輸出 (Target Placements)**。每個節點最終的正規化中心位置 (x, y)。
-    -   `edge_index`: **邊索引 (Edge Index)**。以 COO 格式儲存的圖連接性，即哪些節點之間有連線。根據 `note.md` 的要求，這裡會建立**雙向邊**。
+    -   `edge_index`: **邊索引 (Edge Index)**。以 COO 格式儲存的圖連接性，即哪些節點之間有連線。這裡會建立**雙向邊**。
     -   `q`: **邊特徵 (Edge Attributes)**。每條邊對應的源和目標引腳的正規化相對位置。
 -   **錯誤處理**: 能捕捉並報告在處理單一檔案時發生的錯誤，確保整個轉換過程不會因少數問題檔案而中斷。
 
@@ -120,6 +116,14 @@ edge 的指向是雙向的
     3. 計算預測噪聲與真實噪聲之間的損失 (MSE Loss)。
     4. 更新模型權重。
 -   **儲存結果**: 定期將訓練好的模型權重 (`.pth` 檔案) 儲存到 `checkpoints/` 資料夾。
+
+### 11. `merge_datasets.py` - 合併不同的資料集
+
+-   **使用** 
+    ```bash
+    python merge_datasets.py dataset_A dataset_B merged_dataset
+    ```
+
 
 ---
 
