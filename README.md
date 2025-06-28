@@ -13,6 +13,7 @@ edge 的指向是雙向的
 2.  **佈局生成**：執行 `main.py`，根據配置產生包含元件、引腳和連線的原始佈局資料。
 3.  **分析與視覺化**：使用 `analyze_layout.py` 對單一樣本進行視覺化繪圖與數據統計分析。
 4.  **機器學習格式化**：執行 `format_for_ml.py` 將整批原始資料轉換為模型訓練所需的圖結構資料。
+5.  **模型訓練**：執行 train.py，讀取格式化後的資料，訓練一個基於 GNN 的擴散模型來學習如何生成佈局。
 
 ---
 
@@ -85,6 +86,41 @@ edge 的指向是雙向的
     -   `q`: **邊特徵 (Edge Attributes)**。每條邊對應的源和目標引腳的正規化相對位置。
 -   **錯誤處理**: 能捕捉並報告在處理單一檔案時發生的錯誤，確保整個轉換過程不會因少數問題檔案而中斷。
 
+### 7. `prepare_input.py` - 資料集定義檔
+
+此檔案的功能是定義一個 `FormattedLayoutDataset` 類別，它繼承自 `torch_geometric.data.Dataset` 。
+
+-   **角色**：作為 `train.py` 的「資料藍圖」，它告訴 PyTorch 如何讀取 `formatted_*.json` 檔案，並即時地將其轉換為模型可以處理的 Data 物件。
+-   **注意**：您不需要直接執行此檔案。`train.py` 會透過 `import` 指令來使用它定義的類別。
+
+### 8. `train_config.yaml` - 模型訓練參數檔
+
+這是模型訓練流程的控制中心，用於設定所有與訓練相關的超參數。
+
+-   `model_params`: 定義模型本身的架構參數，例如隱藏層維度 (model_dim) 和注意力頭數 (num_heads) 。
+-   `training_params`: 定義訓練過程的參數，如學習率、批次大小和訓練週期 (epochs)。
+-   `diffusion_params`: 定義擴散過程的參數，如總時間步 timesteps 。
+
+### 9. `model.py` - 擴散模型架構
+
+定義了去噪擴散模型 `DenoisingModel` 的神經網路架構。
+
+-   **基礎架構**：該架構受到論文 "Chip Placement with Diffusion" 的啟發 ，特別是其圖 2 所示的設計 。
+-   **核心組件**：模型主要由一個 Encoder 和一個 `ResGNNBlock` 組成。`ResGNNBlock` 內部使用 `GATv2Conv` (圖注意力網路層) 來捕捉圖結構中的資訊 。
+
+### 10. `train.py` - 模型訓練腳本
+
+這是啟動模型訓練的進入點。
+
+-   **讀取設定**: 載入 `train_config.yaml` 的設定。
+-   **資料載入**: 使用 `prepare_input.py` 中定義的 `FormattedLayoutDataset` 來載入 `formatted_dataset/` 中的資料。
+-   **訓練迴圈**: 實現 Denoising Diffusion Probabilistic Model (DDPM) 的標準訓練流程 。在每個步驟中，腳本會：
+    1. 對乾淨的佈局位置加入隨機噪聲。
+    2. 讓 `DenoisingModel` 預測所加入的噪聲。
+    3. 計算預測噪聲與真實噪聲之間的損失 (MSE Loss)。
+    4. 更新模型權重。
+-   **儲存結果**: 定期將訓練好的模型權重 (`.pth` 檔案) 儲存到 `checkpoints/` 資料夾。
+
 ---
 
 ## 如何使用
@@ -112,6 +148,23 @@ edge 的指向是雙向的
         ```
     -   程式會讀取 `dataset/` 中的所有 JSON 檔案，將它們轉換為 ML-ready 格式，並將新檔案儲存到 `formatted_dataset/` 中。
 
+5. **配置模型訓練參數**:
+    -   打開 `train_config.yaml`。
+    -   在 `model_params` 中設定模型大小（例如 `model_dim: 64` 代表 "Small" 模型）。
+    -   在 `training_params` 中設定學習率、批次大小等。
+
+6. **訓練擴散模型**:
+    -   在終端機中執行 `python train.py`。
+        ```bash
+        python train.py
+        ```
+    -   程式會開始訓練，並顯示進度條與損失值。模型權重會被儲存在 `checkpoints/` 資料夾中。
+
 ## Demo
 
 ![image](layout_generation_demo.gif)
+
+## Reference
+
+Lee, V., Deng, C., Elzeiny, L., Abbeel, P., & Wawrzynek, J. (2024).  
+[Chip Placement with Diffusion](https://arxiv.org/abs/2407.12282v1). *arXiv:2407.12282v1 [cs.LG]*.
