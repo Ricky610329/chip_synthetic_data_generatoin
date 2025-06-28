@@ -1,13 +1,13 @@
 # --- Generation Task Settings ---
 run_settings:
-  num_samples_to_generate: 10 # 要產生幾個樣本
+  num_samples_to_generate: 10000 # 要產生幾個樣本
   output_directory: "dataset"    # 儲存 JSON 檔案的資料夾
 
 # --- Base Parameters (Fixed values) ---
 base_params:
   CANVAS_WIDTH: 1000
   CANVAS_HEIGHT: 1000
-  MAX_ITERATIONS: 10000
+  MAX_ITERATIONS: 3000
   GROWTH_STEP: 1
   STAGNATION_LIMIT: 300
   SHAKE_TRIGGER_THRESHOLD: 30
@@ -27,7 +27,7 @@ base_params:
 randomize_params:
   NUM_RECTANGLES:
     type: "randint"   # 整數亂數
-    low: 100
+    low: 180
     high: 250
   TARGET_DENSITY:
     type: "uniform"   # 浮點數亂數
