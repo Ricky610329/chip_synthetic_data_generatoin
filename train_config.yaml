@@ -1,0 +1,25 @@
+# train_config.yaml (已修改為 Small 模型參數)
+
+# --- Model Hyperparameters ---
+model_params:
+  model_dim: 64       # <--- 已修改為 64，符合 Small 模型
+  num_heads: 4        # GATv2 注意力頭的數量
+
+# --- Training Hyperparameters ---
+training_params:
+  epochs: 10         # 訓練的總輪數
+  batch_size: 32      # 批次大小
+  learning_rate: 0.0001 # 學習率
+
+# --- Diffusion Process Parameters ---
+diffusion_params:
+  timesteps: 1000     # 總擴散步數 (T)
+  # 線性噪聲調度表的起點和終點
+  beta_start: 0.0001
+  beta_end: 0.02
+
+# --- I/O Settings ---
+io_params:
+  dataset_dir: "formatted_dataset/" # 格式化後的資料集路徑
+  output_dir: "checkpoints/"        # 儲存模型權重的資料夾
+  save_checkpoint_every: 5          # 每隔幾輪儲存一次模型
