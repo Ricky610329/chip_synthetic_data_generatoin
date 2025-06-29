@@ -36,15 +36,26 @@ class SinusoidalEmbedding(nn.Module):
                 emb = nn.functional.pad(emb, (0, 1))
 
         elif len(x.shape) == 2 and x.shape[1] == 2: # Position (2D)
-            # 將 pos (N, 2) -> (N, 2, 1) * emb (1, half_dim) -> (N, 2, half_dim)
-            emb = x.unsqueeze(-1) * emb.unsqueeze(0)
-            # 分別計算 sin 和 cos，然後交錯合併
-            sin_emb = emb.sin().view(x.shape[0], -1)
-            cos_emb = emb.cos().view(x.shape[0], -1)
-            # 將 sin_emb 和 cos_emb 合併成最終的 emb
-            # 這裡我們只取一半的 sin 和一半的 cos，以確保總維度正確
-            emb = torch.cat([sin_emb[:, :half_dim], cos_emb[:, :half_dim]], dim=1)
-            # 如果維度不匹配，進行調整
+            # 將 x (N, 2) 分成 x_coord (N, 1) 和 y_coord (N, 1)
+            x_coord = x[:, 0:1]
+            y_coord = x[:, 1:2]
+
+            # 對 x 座標進行編碼
+            emb_x = x_coord * emb.unsqueeze(0)
+            emb_x = torch.cat([emb_x.sin(), emb_x.cos()], dim=-1)
+            # 如果 dim 是奇數，x 編碼部分會被補零，這裡我們先不處理，最後統一處理
+
+            # 對 y 座標進行編碼
+            emb_y = y_coord * emb.unsqueeze(0)
+            emb_y = torch.cat([emb_y.sin(), emb_y.cos()], dim=-1)
+
+            # 將 x 和 y 的編碼拼接起來
+            # 確保總維度為 self.dim
+            # 我們從 x 和 y 各取 self.dim // 2 的維度
+            half_total_dim = self.dim // 2
+            emb = torch.cat([emb_x[:, :half_total_dim], emb_y[:, :half_total_dim]], dim=1)
+
+            # 如果總維度 self.dim 是奇數，則在最後補一個零
             if emb.shape[1] != self.dim:
                 emb = nn.functional.pad(emb, (0, self.dim - emb.shape[1]))
         else:
@@ -146,7 +157,6 @@ class DenoisingModel(nn.Module):
                 - data.pos: 帶噪聲的節點位置 (x_t), shape: [num_nodes, 2]
                 - data.edge_index: 邊索引, shape: [2, num_edges]
                 - data.edge_attr: 邊特徵 (q), shape: [num_edges, edge_feature_dim]
-                - data.batch: 節點到其所屬圖的映射, shape: [num_nodes]
             t (torch.Tensor): 當前的時間步，shape: [batch_size]
 
         Returns:
@@ -163,15 +173,28 @@ class DenoisingModel(nn.Module):
         node_feat_emb = self.node_feature_proj(data.x)
         raw_pos_emb = self.raw_pos_proj(data.pos)
         
-        # 將所有嵌入相加以組合資訊
-        # 使用 data.batch 進行索引，為每個節點分配其對應圖的時間嵌入
-        time_emb_expanded = time_emb[data.batch] 
-        h = node_feat_emb + pos_emb + raw_pos_emb + time_emb_expanded
+        # --- 修正點在這裡 ---
+        # 將所有嵌入相加以組合資訊。
+        # 對於單一樣本（batch_size=1），time_emb shape 為 [1, model_dim]。
+        # 對於批次樣本，time_emb shape 為 [batch_size, model_dim]。
+        # 在與 h (shape: [num_nodes, model_dim]) 相加時，需要正確的廣播。
+        # 如果是批次處理，需要 time_emb[data.batch]。
+        # 但一個更通用的方法是，如果 batch_size=1，可以直接相加，利用廣播。
+        # 這個修復同時適用於單一樣本測試和批次訓練。
+        
+        # 檢查 data 物件是否有 batch 屬性 (在批次處理時會有)
+        if hasattr(data, 'batch') and data.batch is not None:
+            # 這是批次處理的情況
+            h = node_feat_emb + pos_emb + raw_pos_emb + time_emb[data.batch]
+        else:
+            # 這是單一樣本處理的情況 (例如 test.py)
+            # time_emb shape is [1, D], h_in is [N, D] -> broadcasting works.
+            h = node_feat_emb + pos_emb + raw_pos_emb + time_emb
 
-        # 2. 通過 ResGNN Block
+        # 2. 通過 ResGNN Block (僅有論文架構的一小部分)
         h = self.res_gnn_block(h, data.edge_index, data.edge_attr)
         
-        # 3. 預測輸出
+        # 3. 預測輸出 (直接輸出，缺少了 AttGNN 和 MLP)
         predicted_noise = self.output_proj(h)
 
         return predicted_noise
