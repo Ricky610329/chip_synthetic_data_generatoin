@@ -32,9 +32,16 @@ def get_randomized_params(config):
     return params
 
 def save_layout_to_json(layout, params, filepath):
+    # <<< 修改這裡以儲存新增的屬性 >>>
     layout_data = {
         "canvas_width": layout.canvas_width, "canvas_height": layout.canvas_height,
-        "rectangles": [ { "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h, "growth_prob": r.growth_prob, "fixed": r.fixed } for r in layout.rectangles ],
+        "rectangles": [ 
+            { 
+                "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h, 
+                "growth_prob": r.growth_prob, "fixed": r.fixed,
+                "group_id": r.group_id, "group_type": r.group_type  # 新增
+            } for r in layout.rectangles 
+        ],
         "pins": [ { "id": pin.id, "parent_rect_id": pin.parent_rect.id, "rel_pos": pin.rel_pos } for r in layout.rectangles for pin in r.pins ],
         "edges": [ (pin1.id, pin2.id) for pin1, pin2 in layout.edges ]
     }
@@ -62,16 +69,17 @@ def main():
         
         placed_rects = []
         last_id = -1
-        last_pin_id = 0 # <<< NEW: 初始化 Pin ID 計數器
+        last_pin_id = 0 
         
+        # main 函式中調用 symmetry generator 的部分不需要修改
         if params.get('analog_symmetry_settings', {}).get('enable', False):
             sym_gen = SymmetricGenerator(params)
-            # <<< MODIFICATION: 傳遞並接收 pin_id
             new_symmetric_rects, last_id, last_pin_id = sym_gen.generate_analog_groups(
                 start_id=0, 
                 start_pin_id=0,
                 existing_rects=placed_rects
             )
+            # 注意：generate_analog_groups 內部已經將 new_symmetric_rects 加入到 existing_rects
         
         print(f"\n--- 開始生成其餘 {params['NUM_RECTANGLES']} 個隨機填充元件 ---")
         num_macros = int(params['NUM_RECTANGLES'] * params['MACRO_RATIO'])
@@ -99,7 +107,6 @@ def main():
         final_layout = generator.generate()
 
         if final_layout:
-            # <<< MODIFICATION: 將最新的 pin_id 傳入，以繼續編號
             final_layout.generate_pins(
                 k=params['PIN_DENSITY_K'], 
                 p=params['RENT_EXPONENT_P'], 

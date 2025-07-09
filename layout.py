@@ -23,6 +23,8 @@ class Rectangle:
         self.growth_prob = growth_prob
         self.pins = [] # 現在儲存 Pin 物件
         self.fixed = False  # 固定的對稱元件
+        self.group_id = None    # <<< 新增：用於標識對稱群組的 ID
+        self.group_type = None  # <<< 新增：用於記錄對稱類型 (例如 'vertical', 'quad')
 
     def intersects(self, other):
         """檢查此矩形是否與另一個矩形相交"""
@@ -59,7 +61,6 @@ class Layout:
         pin_global_id = start_pin_id
         new_pins_count = 0
         for r in self.rectangles:
-            # <<< MODIFICATION: 如果元件是固定的(對稱的)，則跳過，因為它已經有引腳了
             if r.fixed:
                 continue
             
@@ -67,7 +68,7 @@ class Layout:
             num_pins = int(k * (area ** p))
             if area > 1 and num_pins == 0: num_pins = 1
             
-            r.pins = [] # 確保非固定元件的 pin 列表是空的
+            r.pins = [] 
             for _ in range(num_pins):
                 pin_x_rel = random.uniform(-r.w / 2, r.w / 2)
                 pin_y_rel = random.uniform(-r.h / 2, r.h / 2)
