@@ -1,4 +1,4 @@
-# layout.py (修改版)
+# layout.py (引腳生成修正版)
 
 import random
 import math
@@ -19,12 +19,10 @@ class Rectangle:
     """代表一個元件（矩形）"""
     def __init__(self, rect_id, x, y, w, h, growth_prob=0.5):
         self.id = rect_id
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
+        self.x = x; self.y = y; self.w = w; self.h = h
         self.growth_prob = growth_prob
         self.pins = [] # 現在儲存 Pin 物件
+        self.fixed = False  # 固定的對稱元件
 
     def intersects(self, other):
         """檢查此矩形是否與另一個矩形相交"""
@@ -45,71 +43,55 @@ class Rectangle:
 class Layout:
     """代表一個完整的佈局，包含所有元件、引腳和連線"""
     def __init__(self, width, height):
-        self.canvas_width = width
-        self.canvas_height = height
-        self.rectangles = []
-        self.edges = [] # <<< NEW: 新增一個列表來儲存連線
+        self.canvas_width = width; self.canvas_height = height
+        self.rectangles = []; self.edges = []
 
     def add_rectangle(self, rect):
-        """新增一個元件到佈局中"""
         self.rectangles.append(rect)
 
     def get_density(self):
-        """計算當前佈局的填充密度"""
         total_area = sum(r.w * r.h for r in self.rectangles)
         return total_area / (self.canvas_width * self.canvas_height)
 
-    def generate_pins(self, k, p):
-        """為佈局中所有元件生成引腳"""
-        print("\n開始為元件生成引腳...")
-        pin_global_id = 0
+    def generate_pins(self, k, p, start_pin_id=0):
+        """為佈局中【非固定】的元件生成引腳"""
+        print("\n開始為【非對稱】元件生成引腳...")
+        pin_global_id = start_pin_id
+        new_pins_count = 0
         for r in self.rectangles:
+            # <<< MODIFICATION: 如果元件是固定的(對稱的)，則跳過，因為它已經有引腳了
+            if r.fixed:
+                continue
+            
             area = r.w * r.h
             num_pins = int(k * (area ** p))
             if area > 1 and num_pins == 0: num_pins = 1
             
-            r.pins = []
+            r.pins = [] # 確保非固定元件的 pin 列表是空的
             for _ in range(num_pins):
                 pin_x_rel = random.uniform(-r.w / 2, r.w / 2)
                 pin_y_rel = random.uniform(-r.h / 2, r.h / 2)
-                r.pins.append(Pin(pin_global_id, r, (pin_x_rel, pin_y_rel))) # <<< MODIFIED
+                r.pins.append(Pin(pin_global_id, r, (pin_x_rel, pin_y_rel)))
                 pin_global_id += 1
-        print(f"引腳生成完畢，總共生成了 {pin_global_id} 個引腳。")
+                new_pins_count += 1
+        print(f"引腳生成完畢，總共生成了 {new_pins_count} 個新引腳。")
     
-    def generate_edges(self, p_max, decay_rate, max_length_limit): # <<< MODIFIED: 增加 max_length_limit 參數
-        """
-        生成引腳之間的連線
-        p_max: 最大連接機率
-        decay_rate: 隨距離的衰減率
-        max_length_limit: 連線的最大長度上限
-        """
+    def generate_edges(self, p_max, decay_rate, max_length_limit):
+        """生成引腳之間的連線"""
         print("\n開始生成引腳之間的連線...")
         all_pins = [pin for r in self.rectangles for pin in r.pins]
         self.edges = []
         
-        # 遍歷所有獨特的引腳對 O(N^2)
         for i in range(len(all_pins)):
             for j in range(i + 1, len(all_pins)):
-                pin1 = all_pins[i]
-                pin2 = all_pins[j]
+                pin1 = all_pins[i]; pin2 = all_pins[j]
+                if pin1.parent_rect.id == pin2.parent_rect.id: continue
 
-                # 確保引腳在不同的元件上
-                if pin1.parent_rect.id == pin2.parent_rect.id:
-                    continue
-
-                # 計算 L1 曼哈頓距離
-                pos1 = pin1.get_absolute_pos()
-                pos2 = pin2.get_absolute_pos()
+                pos1 = pin1.get_absolute_pos(); pos2 = pin2.get_absolute_pos()
                 distance = abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
-                # <<< NEW: 過長截斷檢查
-                if distance > max_length_limit:
-                    continue # 如果超過長度上限，直接跳過
-
-                # 計算連接機率
+                if distance > max_length_limit: continue
                 prob = p_max * math.exp(-decay_rate * distance)
-
-                # 抽樣決定是否連線
                 if random.random() < prob:
                     self.edges.append((pin1, pin2))
         
