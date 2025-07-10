@@ -1,10 +1,9 @@
-# demo_generator.py (對稱引腳顯示修正版)
+# demo_generator.py (已修正物件屬性存取錯誤)
 
 import random
 import numpy as np
 import yaml
 import os
-import json
 import time
 import shutil
 
@@ -17,6 +16,7 @@ import imageio
 from generator import LayoutGenerator
 from layout import Rectangle, Layout
 from symmetry import SymmetricGenerator
+from grouper import LayoutGrouper
 
 # --- 全域變數，用於儲存生成的影格 ---
 FRAME_DIR = "_frames_for_gif"
@@ -32,9 +32,10 @@ def load_config(path='config.yaml'):
 def get_randomized_params(config):
     """從設定檔中獲取一組隨機參數"""
     params = config['base_params'].copy()
-    if 'analog_symmetry_settings' in config:
-        params['analog_symmetry_settings'] = config['analog_symmetry_settings'].copy()
-    for key, rule in config['randomize_params'].items():
+    for key, value in config.items():
+        if isinstance(value, dict):
+            params.setdefault(key, value.copy())
+    for key, rule in config.get('randomize_params', {}).items():
         if rule['type'] == 'randint':
             params[key] = random.randint(rule['low'], rule['high'])
         elif rule['type'] == 'uniform':
@@ -53,40 +54,39 @@ def save_frame(rects, params, title, is_final=False):
     
     fig, ax = plt.subplots(1, figsize=(10, 10))
     ax.set_xlim(0, params['CANVAS_WIDTH'])
-    ax.set_ylim(0, params['CANVAS_HEIGHT'])
+    ax.set_ylim(params['CANVAS_HEIGHT'], 0) # 保持 Y 軸反轉
     ax.set_aspect('equal', adjustable='box')
     
     ax.set_facecolor('white')
     plt.title(title, fontsize=16, color='black', pad=20)
     ax.grid(True, linestyle='--', alpha=0.6)
-    ax.invert_yaxis()
-
+    
     # 繪製所有矩形
     for r in rects:
         x, y, w, h = r.x - r.w/2, r.y - r.h/2, r.w, r.h
         
-        if r.fixed:
+        # ✨ FIX: Use direct attribute access (r.attribute) instead of dict access (r.get('attribute'))
+        group_type = r.group_type
+
+        if group_type == 'hierarchical':
+            face_color = '#E1BEE7'; edge_color = '#6A1B9A'; alpha = 1.0
+        elif group_type: # Covers 'vertical', 'horizontal', 'quad'
             face_color = 'mediumseagreen'; edge_color = 'darkgreen'; alpha = 1.0
         else:
-            is_macro = r.growth_prob >= params['MACRO_GROWTH_PROB_RANGE'][0]
+            is_macro = r.growth_prob >= params.get('MACRO_GROWTH_PROB_RANGE', [0.7, 0.9])[0]
             face_color = 'skyblue' if is_macro else 'lightcoral'; edge_color = 'black'; alpha = 0.9
 
-        rect_patch = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor=edge_color, facecolor=face_color, alpha=alpha)
+        rect_patch = patches.Rectangle((x, y), w, h, linewidth=1.5, edgecolor=edge_color, facecolor=face_color, alpha=alpha)
         ax.add_patch(rect_patch)
 
-    # --- >>> 新增修改：繪製對稱元件的 Pin <<< ---
+    # 繪製群組元件的 Pin
     for r in rects:
-        # 如果是固定的對稱元件，且它有 pins 屬性
-        if r.fixed and hasattr(r, 'pins') and r.pins:
+        if r.group_id and hasattr(r, 'pins') and r.pins:
             for pin in r.pins:
-                # 直接計算 pin 的絕對位置
                 abs_pos = (r.x + pin.rel_pos[0], r.y + pin.rel_pos[1])
-                # 繪製一個黑色小圓點代表 Pin
                 pin_marker = patches.Circle(abs_pos, radius=1.5, color='black', zorder=10)
                 ax.add_patch(pin_marker)
-    # --- >>> 新增修改結束 <<< ---
 
-    # 儲存圖片
     filepath = os.path.join(FRAME_DIR, f"frame_{frame_counter:05d}.png")
     plt.savefig(filepath, dpi=120, bbox_inches='tight', pad_inches=0.2, facecolor='white')
     plt.close(fig)
@@ -127,9 +127,6 @@ class DemoLayoutGenerator(LayoutGenerator):
         return result, success
 
     def generate(self):
-        """
-        覆寫主要的 generate 函式，在迴圈中加入儲存影格的邏輯。
-        """
         p = self.params
         print(f"\n[DEMO] Starting Generation Loop...")
         start_time = time.time()
@@ -138,7 +135,6 @@ class DemoLayoutGenerator(LayoutGenerator):
         
         stagnation_counter = 0; shakes_since_last_infill = 0; infill_triggered_count = 0
 
-        # 主要生長迴圈
         for i in range(p['MAX_ITERATIONS']):
             changed_this_iteration = False
             movable_rects = [r for r in rects if not r.fixed]
@@ -222,20 +218,14 @@ def main():
     
     placed_rects = []
     last_id = -1
-    # --- >>> 新增修改：初始化 pin ID 計數器 <<< ---
     last_pin_id = 0
     
     # A. 對稱元件
     print("\n--- Phase 1: Generating Symmetric Groups (with Pins) ---")
     if params.get('analog_symmetry_settings', {}).get('enable', False):
         sym_gen = SymmetricGenerator(params)
-        # --- >>> 新增修改：更新函式呼叫以處理 pin ID <<< ---
-        # generate_analog_groups 現在會原地修改 placed_rects 列表，
-        # 並為其中的對稱元件加上 pins 屬性。
         _, last_id, last_pin_id = sym_gen.generate_analog_groups(
-            start_id=0, 
-            start_pin_id=0,
-            existing_rects=placed_rects
+            start_id=0, start_pin_id=0, existing_rects=placed_rects
         )
     save_frame(placed_rects, params, "Phase 1: Symmetric Groups Placed", is_final=True)
 
@@ -260,6 +250,16 @@ def main():
              print(f"Warning: Could not find space for random component {j+1}. Skipping.")
     save_frame(placed_rects, params, "Phase 2: Initial Random Components Placed", is_final=True)
     
+    # C. 階層式分組
+    print("\n--- Phase 2.5: Applying Hierarchical Grouping ---")
+    if params.get('grouping_settings', {}).get('enable', False):
+        temp_layout = Layout(params['CANVAS_WIDTH'], params['CANVAS_HEIGHT'])
+        temp_layout.rectangles = placed_rects
+        grouper = LayoutGrouper(temp_layout, params)
+        grouper.create_hierarchical_groups()
+    save_frame(placed_rects, params, "Phase 2.5: Hierarchical Groups Formed", is_final=True)
+
+    # D. 生長與優化
     print("\n--- Phase 3: Growth and Optimization ---")
     params['initial_rects'] = placed_rects
     demo_generator = DemoLayoutGenerator(params)
@@ -267,14 +267,16 @@ def main():
     
     save_frame(final_layout.rectangles, params, "Final Layout", is_final=True)
 
+    # E. 產生 GIF
     print("\n--- Phase 4: Compiling GIF ---")
     gif_path = "layout_generation_demo.gif"
-    with imageio.get_writer(gif_path, mode='I', duration=0.08) as writer:
+    with imageio.get_writer(gif_path, mode='I', duration=0.12) as writer:
         for filename in frame_files:
-            image = imageio.imread(filename)
+            image = imageio.v2.imread(filename)
             writer.append_data(image)
     print(f"Success! GIF saved to: {gif_path}")
 
+    # F. 清理
     print("\n--- Phase 5: Cleaning up temporary files ---")
     shutil.rmtree(FRAME_DIR)
     print("Done.")

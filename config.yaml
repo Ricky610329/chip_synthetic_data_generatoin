@@ -1,46 +1,45 @@
+# config.yaml (增加了 grouping_settings)
+
 # --- Generation Task Settings ---
 run_settings:
-  num_samples_to_generate: 10 # 要產生幾個樣本
-  output_directory: "dataset"    # 儲存 JSON 檔案的資料夾
+  num_samples_to_generate: 10
+  output_directory: "dataset_hierarchical" # 建議使用新資料夾
 
-# --- NEW Analog Symmetry Settings (ENABLED) ---
+# --- Analog Symmetry Settings ---
 analog_symmetry_settings:
   enable: true
   num_groups:
     type: "randint"
     low: 4
     high: 8
-  # --- NEW: 更靈活的群組設定 ---
   group_configs:
-    # 規則1: 生成一個四方對 (Quad Layout)，總共4個元件
-    - rects_per_group: 4
-      group_axis: "quad" # "quad" 是新的選項，用於共中心佈局
-      weight: 1          # 生成這種群組的相對權重
-    # 規則2: 生成一個垂直對稱的元件對，總共2個元件
-    - rects_per_group: 2
-      group_axis: "vertical"
-      weight: 3          # 讓這種簡單的差動對更常見
-    # 規則3: 生成一個水平對稱的元件對，總共2個元件
-    - rects_per_group: 2
-      group_axis: "horizontal"
-      weight: 2
-    # 規則4: 生成一個包含6個元件的複雜對稱群 (3對)
-    - rects_per_group: 6
-      group_axis: "vertical"
-      weight: 1
-    - rects_per_group: 4
-      group_axis: "horizontal"
-      weight: 1
-      
-  # --- 對稱元件本身的物理特性 ---
+    - { rects_per_group: 4, group_axis: "quad", weight: 1 }
+    - { rects_per_group: 2, group_axis: "vertical", weight: 3 }
+    - { rects_per_group: 2, group_axis: "horizontal", weight: 2 }
+    - { rects_per_group: 6, group_axis: "vertical", weight: 1 }
+    - { rects_per_group: 4, group_axis: "horizontal", weight: 1 }
   component_width_range: [60, 120]
   component_height_range: [80, 140]
-  # --- MODIFICATION: 使用固定的間隙，而非隨機的間距因子 ---
-  group_gap_range: [4, 10]  # 對稱元件之間的距離範圍 (單位: 像素)
-  
-  # --- 為對稱元件設定 Pin 的數量範圍 ---
+  group_gap_range: [4, 10]
   pins_per_component: [2, 5]
 
+# ===================================================================
+# Hierarchical Grouping Settings
+# ===================================================================
+grouping_settings:
+  enable: true # 設定為 true 來啟用此功能
+  # 要嘗試建立多少個新的階層式群組
+  num_groups_to_create:
+    type: "randint"
+    low: 3
+    high: 6
+  # 每個新群組應包含多少個「項目」(項目可以是單一元件或已存在的對稱群組)
+  items_per_group:
+    type: "randint"
+    low: 2
+    high: 5
+  # 組成群組的方法，目前僅支援 "proximity" (鄰近度)
+  method: "proximity"
 
 # --- Base Parameters (Fixed values) ---
 base_params:
@@ -48,7 +47,6 @@ base_params:
   CANVAS_HEIGHT: 1000
   MAX_ITERATIONS: 3000
   GROWTH_STEP: 1
-  
   STAGNATION_LIMIT: 300
   SHAKE_TRIGGER_THRESHOLD: 30
   ROLLBACK_STEPS: 5
@@ -63,15 +61,13 @@ base_params:
   MAX_WIRELENGTH_LIMIT: 500
 
 # --- Parameters to Randomize ---
-# 每一輪生成都會從以下規則中隨機取值
 randomize_params:
-  # 注意：當啟用對稱生成時，NUM_RECTANGLES 代表「非對稱」元件的數量
   NUM_RECTANGLES:
-    type: "randint"   # 整數亂數
+    type: "randint"
     low: 180
     high: 250
   TARGET_DENSITY:
-    type: "uniform"   # 浮點數亂數
+    type: "uniform"
     low: 0.75
     high: 0.85
   MAX_ASPECT_RATIO:
@@ -83,7 +79,7 @@ randomize_params:
     low: 0.05
     high: 0.20
   MACRO_GROWTH_PROB_RANGE:
-    type: "uniform_pair" # 一對浮點數亂數
+    type: "uniform_pair"
     low: [0.7, 0.8]
     high: [0.9, 0.98]
   STD_CELL_GROWTH_PROB_RANGE:

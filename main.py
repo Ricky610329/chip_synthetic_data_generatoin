@@ -1,4 +1,4 @@
-# main.py (引腳 ID 傳遞修正版)
+# main.py (增加了階層式分組步驟)
 
 import random
 import numpy as np
@@ -10,6 +10,7 @@ import time
 from generator import LayoutGenerator
 from layout import Layout, Rectangle
 from symmetry import SymmetricGenerator
+from grouper import LayoutGrouper # ✨ 1. 導入新的 Grouper 類
 
 def load_config(path='config.yaml'):
     with open(path, 'r', encoding='utf-8') as f:
@@ -18,9 +19,12 @@ def load_config(path='config.yaml'):
 
 def get_randomized_params(config):
     params = config['base_params'].copy()
-    if 'analog_symmetry_settings' in config:
-        params['analog_symmetry_settings'] = config['analog_symmetry_settings'].copy()
-    for key, rule in config['randomize_params'].items():
+    # 複製所有設定區塊，以防萬一
+    for key, value in config.items():
+        if isinstance(value, dict):
+            params.setdefault(key, value.copy())
+
+    for key, rule in config.get('randomize_params', {}).items():
         if rule['type'] == 'randint':
             params[key] = random.randint(rule['low'], rule['high'])
         elif rule['type'] == 'uniform':
@@ -32,22 +36,26 @@ def get_randomized_params(config):
     return params
 
 def save_layout_to_json(layout, params, filepath):
-    # <<< 修改這裡以儲存新增的屬性 >>>
     layout_data = {
         "canvas_width": layout.canvas_width, "canvas_height": layout.canvas_height,
         "rectangles": [ 
             { 
                 "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h, 
                 "growth_prob": r.growth_prob, "fixed": r.fixed,
-                "group_id": r.group_id, "group_type": r.group_type  # 新增
+                "group_id": r.group_id, "group_type": r.group_type
             } for r in layout.rectangles 
         ],
         "pins": [ { "id": pin.id, "parent_rect_id": pin.parent_rect.id, "rel_pos": pin.rel_pos } for r in layout.rectangles for pin in r.pins ],
         "edges": [ (pin1.id, pin2.id) for pin1, pin2 in layout.edges ]
     }
+    # 移除 params 中不適合序列化的項目
+    if 'initial_rects' in params:
+        del params['initial_rects']
+        
     full_data = { "generation_params": params, "layout_data": layout_data }
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(full_data, f, ensure_ascii=False, indent=2)
+
 
 def main():
     config = load_config('config.yaml')
@@ -71,15 +79,11 @@ def main():
         last_id = -1
         last_pin_id = 0 
         
-        # main 函式中調用 symmetry generator 的部分不需要修改
         if params.get('analog_symmetry_settings', {}).get('enable', False):
             sym_gen = SymmetricGenerator(params)
             new_symmetric_rects, last_id, last_pin_id = sym_gen.generate_analog_groups(
-                start_id=0, 
-                start_pin_id=0,
-                existing_rects=placed_rects
+                start_id=0, start_pin_id=0, existing_rects=placed_rects
             )
-            # 注意：generate_analog_groups 內部已經將 new_symmetric_rects 加入到 existing_rects
         
         print(f"\n--- 開始生成其餘 {params['NUM_RECTANGLES']} 個隨機填充元件 ---")
         num_macros = int(params['NUM_RECTANGLES'] * params['MACRO_RATIO'])
@@ -89,7 +93,6 @@ def main():
                 rand_x = random.uniform(1, params['CANVAS_WIDTH'] - 1)
                 rand_y = random.uniform(1, params['CANVAS_HEIGHT'] - 1)
                 temp_rect = Rectangle(None, rand_x, rand_y, 1, 1)
-                
                 if not any(temp_rect.intersects(r) for r in placed_rects):
                     prob = (random.uniform(*params['MACRO_GROWTH_PROB_RANGE']) if j < num_macros 
                             else random.uniform(*params['STD_CELL_GROWTH_PROB_RANGE']))
@@ -106,6 +109,11 @@ def main():
         generator = LayoutGenerator(params)
         final_layout = generator.generate()
 
+        # ✨ 2. 在佈局生成後，應用階層式分組
+        if params.get('grouping_settings', {}).get('enable', False):
+            grouper = LayoutGrouper(final_layout, params)
+            final_layout = grouper.create_hierarchical_groups()
+
         if final_layout:
             final_layout.generate_pins(
                 k=params['PIN_DENSITY_K'], 
@@ -118,7 +126,6 @@ def main():
                 max_length_limit=params['MAX_WIRELENGTH_LIMIT']
             )
             output_filepath = os.path.join(output_dir, f"layout_{sample_id}.json")
-            if 'initial_rects' in params: del params['initial_rects']
             save_layout_to_json(final_layout, params, output_filepath)
             
             end_time = time.time()

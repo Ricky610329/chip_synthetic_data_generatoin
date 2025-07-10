@@ -1,10 +1,11 @@
-# analyze_layout.py (最終視覺化修正版)
+# analyze_layout.py (支援階層式群組顯示)
 
 import json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 import argparse
+from collections import defaultdict
 
 def visualize_and_analyze(data):
     layout_data = data['layout_data']
@@ -15,9 +16,10 @@ def visualize_and_analyze(data):
     
     fig, ax = plt.subplots(1, figsize=(12, 12))
     ax.set_xlim(0, canvas_width)
-    ax.set_ylim(0, canvas_height)
+    ax.set_ylim(canvas_height, 0) # 保持 Y 軸反轉
     ax.set_aspect('equal', adjustable='box')
-    plt.title(f"Layout Visualization (Seed: {params.get('SEED', 'N/A')})")
+    ax.set_title(f"Layout Visualization (Seed: {params.get('SEED', 'N/A')})")
+    ax.grid(True, linestyle='--', alpha=0.5)
 
     all_rects = layout_data['rectangles']
     all_pins = layout_data.get('pins', [])
@@ -26,71 +28,67 @@ def visualize_and_analyze(data):
     rects_map = {r['id']: r for r in all_rects}
     pins_map = {p['id']: p for p in all_pins}
     
-    # 建立一個集合，存放所有固定(對稱)元件的 ID，方便快速查詢
-    fixed_rect_ids = {r['id'] for r in all_rects if r.get('fixed', False)}
-
-    # --- 繪製元件 ---
+    # ✨ 1. 修改顏色邏輯以區分三種類型
+    print("繪製元件 (標準、對稱、階層)...")
     for r in all_rects:
         x, y, w, h = r['x'] - r['w']/2, r['y'] - r['h']/2, r['w'], r.get('h', r['w'])
-        
-        if r.get('fixed', False):
-            # 固定的對稱元件使用綠色
-            face_color = 'mediumseagreen'; edge_color = 'darkgreen'
+        group_type = r.get('group_type')
+
+        if group_type == 'hierarchical':
+            # 新的階層式群組使用紫色系
+            face_color = '#E1BEE7'; edge_color = '#6A1B9A'
+        elif group_type in ['vertical', 'horizontal', 'quad']:
+            # 對稱群組使用綠色系 (或您喜歡的其他顏色)
+            face_color = '#C8E6C9'; edge_color = '#2E7D32'
         else:
-            # 可變的隨機元件使用原來的顏色
-            is_macro = r['growth_prob'] >= params['MACRO_GROWTH_PROB_RANGE'][0]
-            face_color = 'skyblue' if is_macro else 'lightcoral'
-            edge_color = 'black'
+            # 標準元件使用藍色系
+            is_macro = r['growth_prob'] >= params.get('MACRO_GROWTH_PROB_RANGE', [0.7, 0.9])[0]
+            face_color = '#BBDEFB' if is_macro else '#E3F2FD'
+            edge_color = '#0D47A1'
 
-        rect_patch = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor=edge_color, facecolor=face_color, alpha=0.7)
+        rect_patch = patches.Rectangle((x, y), w, h, linewidth=1.5, edgecolor=edge_color, facecolor=face_color, alpha=0.8, zorder=2)
         ax.add_patch(rect_patch)
-        ax.text(r['x'], r['y'], str(r['id']), ha='center', va='center', fontsize=6, color='white', 
-                bbox=dict(facecolor='black', alpha=0.4, boxstyle='round,pad=0.1', ec='none'))
+        ax.text(r['x'], r['y'], str(r['id']), ha='center', va='center', fontsize=6, color='black', zorder=5)
 
-    # --- 只繪製對稱元件的 Pin ---
-    print("繪製對稱元件的引腳...")
+    # ✨ 2. 繪製所有群組內元件的 Pin
+    print("繪製所有群組元件的引腳...")
     for pin in all_pins:
-        # 檢查 Pin 的父元件是否為對稱元件
-        if pin['parent_rect_id'] in fixed_rect_ids:
-            parent_rect = rects_map[pin['parent_rect_id']]
+        parent_rect = rects_map.get(pin['parent_rect_id'])
+        # 只要元件屬於任何一個群組，就繪製其 Pin
+        if parent_rect and parent_rect.get('group_id') is not None:
             abs_pos = (parent_rect['x'] + pin['rel_pos'][0], parent_rect['y'] + pin['rel_pos'][1])
-            # 繪製一個黑色小圓點代表 Pin
-            pin_marker = patches.Circle(abs_pos, radius=2, color='black', zorder=10)
+            pin_marker = patches.Circle(abs_pos, radius=2, color='black', zorder=4)
             ax.add_patch(pin_marker)
 
-    # --- MODIFICATION: 繪製【所有】連線，但使用灰色以降低視覺權重 ---
+    # 繪製所有連線
     wirelengths = []
     if all_edges:
         print("繪製所有元件之間的連線...")
         for pin1_id, pin2_id in all_edges:
-            pin1 = pins_map.get(pin1_id)
-            pin2 = pins_map.get(pin2_id)
+            pin1, pin2 = pins_map.get(pin1_id), pins_map.get(pin2_id)
             if not pin1 or not pin2: continue
-
-            rect1 = rects_map[pin1['parent_rect_id']]
-            rect2 = rects_map[pin2['parent_rect_id']]
+            rect1, rect2 = rects_map[pin1['parent_rect_id']], rects_map[pin2['parent_rect_id']]
             pos1 = (rect1['x'] + pin1['rel_pos'][0], rect1['y'] + pin1['rel_pos'][1])
             pos2 = (rect2['x'] + pin2['rel_pos'][0], rect2['y'] + pin2['rel_pos'][1])
-            
-            # 使用灰色來繪製所有連線
-            ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], color='gray', linewidth=0.5, alpha=0.6, zorder=5)
+            ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], color='gray', linewidth=0.5, alpha=0.6, zorder=3)
             wirelengths.append(abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1]))
     
-    # ... (其餘統計分析部分保持不變)
-    print("\n" + "="*40)
-    print("      Layout Analysis Report")
-    print("="*40)
-    # ...
+    # ✨ 3. 更新圖例
+    legend_patches = [
+        patches.Patch(facecolor='#BBDEFB', edgecolor='#0D47A1', label='Standard Component'),
+        patches.Patch(facecolor='#C8E6C9', edgecolor='#2E7D32', label='Symmetric Component'),
+        patches.Patch(facecolor='#E1BEE7', edgecolor='#6A1B9A', label='Hierarchical Group Component')
+    ]
+    ax.legend(handles=legend_patches, loc='upper right', fontsize='small')
     
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.gca().invert_yaxis()
+    # ... (統計分析部分保持不變) ...
+    
     plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Visualize and analyze a generated layout JSON file.")
     parser.add_argument("json_file", type=str, help="Path to the layout JSON file.")
     args = parser.parse_args()
-
     try:
         with open(args.json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
