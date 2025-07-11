@@ -1,7 +1,45 @@
+# config.yaml (增加了 grouping_settings)
+
 # --- Generation Task Settings ---
 run_settings:
-  num_samples_to_generate: 10000 # 要產生幾個樣本
-  output_directory: "dataset"    # 儲存 JSON 檔案的資料夾
+  num_samples_to_generate: 10
+  output_directory: "dataset_hierarchical" # 建議使用新資料夾
+
+# --- Analog Symmetry Settings ---
+analog_symmetry_settings:
+  enable: true
+  num_groups:
+    type: "randint"
+    low: 4
+    high: 8
+  group_configs:
+    - { rects_per_group: 4, group_axis: "quad", weight: 1 }
+    - { rects_per_group: 2, group_axis: "vertical", weight: 3 }
+    - { rects_per_group: 2, group_axis: "horizontal", weight: 2 }
+    - { rects_per_group: 6, group_axis: "vertical", weight: 1 }
+    - { rects_per_group: 4, group_axis: "horizontal", weight: 1 }
+  component_width_range: [60, 120]
+  component_height_range: [80, 140]
+  group_gap_range: [4, 10]
+  pins_per_component: [2, 5]
+
+# ===================================================================
+# Hierarchical Grouping Settings
+# ===================================================================
+grouping_settings:
+  enable: true # 設定為 true 來啟用此功能
+  # 要嘗試建立多少個新的階層式群組
+  num_groups_to_create:
+    type: "randint"
+    low: 3
+    high: 6
+  # 每個新群組應包含多少個「項目」(項目可以是單一元件或已存在的對稱群組)
+  items_per_group:
+    type: "randint"
+    low: 2
+    high: 5
+  # 組成群組的方法，目前僅支援 "proximity" (鄰近度)
+  method: "proximity"
 
 # --- Base Parameters (Fixed values) ---
 base_params:
@@ -23,14 +61,13 @@ base_params:
   MAX_WIRELENGTH_LIMIT: 500
 
 # --- Parameters to Randomize ---
-# 每一輪生成都會從以下規則中隨機取值
 randomize_params:
   NUM_RECTANGLES:
-    type: "randint"   # 整數亂數
+    type: "randint"
     low: 180
     high: 250
   TARGET_DENSITY:
-    type: "uniform"   # 浮點數亂數
+    type: "uniform"
     low: 0.75
     high: 0.85
   MAX_ASPECT_RATIO:
@@ -42,7 +79,7 @@ randomize_params:
     low: 0.05
     high: 0.20
   MACRO_GROWTH_PROB_RANGE:
-    type: "uniform_pair" # 一對浮點數亂數
+    type: "uniform_pair"
     low: [0.7, 0.8]
     high: [0.9, 0.98]
   STD_CELL_GROWTH_PROB_RANGE:
