@@ -1,16 +1,32 @@
-# config.yaml (增加了 alignment_settings)
+# config.yaml (已更新為明確的 component_types)
 
 # --- Generation Task Settings ---
 run_settings:
-  num_samples_to_generate: 3
+  num_samples_to_generate: 5
   output_directory: "dataset_ml_ready"
 
 # ===================================================================
-# Alignment Settings
+# Component Type Settings
+# ===================================================================
+component_types:
+  macro:
+    proportion: 0.15  # 10% 的隨機元件將是 Macro
+    # Macro 的尺寸明顯大於 Standard Cell
+    width_range: [80, 200]
+    height_range: [80, 200]
+    growth_prob_range: [0.7, 0.95] # Macro 依然有較高的生長意願
+  std_cell:
+    proportion: 0.85  # 90% 的隨機元件將是 Standard Cell
+    # Standard Cell 的尺寸較小
+    width_range: [10, 30]
+    height_range: [10, 30]
+    growth_prob_range: [0.1, 0.4] # Standard Cell 生長意願較低
+
+# ===================================================================
+# Alignment & Symmetry Settings
 # ===================================================================
 alignment_settings:
-  enable: false # 設定為 true 來啟用此功能
-  # 要生成多少個對齊的元件集合
+  enable: true
   num_sets:
     type: "randint"
     low: 3
@@ -42,12 +58,11 @@ analog_symmetry_settings:
     low: 2
     high: 4
   group_configs:
-    - { rects_per_group: 2, group_axis: "vertical", weight: 1 }
-    - { rects_per_group: 2, group_axis: "horizontal", weight: 1 }
-  component_width_range: [50, 200]
-  component_height_range: [50, 200]
+    - { rects_per_group: 2, group_axis: "vertical", weight: 3 }
+    - { rects_per_group: 2, group_axis: "horizontal", weight: 2 }
+  component_width_range: [50, 100]
+  component_height_range: [50, 100]
   group_gap_range: [4, 10]
-  pins_per_component: [2, 6]
 
 # --- Hierarchical Grouping Settings ---
 grouping_settings:
@@ -81,14 +96,20 @@ base_params:
   INFILL_MAX_TRIGGERS: 3
   PIN_DENSITY_K: 0.01
   EDGE_P_MAX: 0.6
+  PIN_EDGE_MARGIN_RATIO: 0.1
+  # 以下兩個參數現在是唯一控制引腳數量的參數
+  PIN_DENSITY_K: 0.01
+  EDGE_P_MAX: 0.6
   MAX_WIRELENGTH_LIMIT: 500
+  # 新增: Pin 在邊緣的範圍比例。0.1 表示在離邊緣 10% 的寬度/高度範圍內生成。
+  PIN_EDGE_MARGIN_RATIO: 0.1
 
 # --- Parameters to Randomize ---
 randomize_params:
   NUM_RECTANGLES:
     type: "randint"
-    low: 150
-    high: 200
+    low: 80  # 由於 Macro 變大，總數可以減少
+    high: 120
   TARGET_DENSITY:
     type: "uniform"
     low: 0.75

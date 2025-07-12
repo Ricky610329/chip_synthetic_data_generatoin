@@ -1,4 +1,4 @@
-# generator.py (還原簡化版)
+# generator.py
 
 import random
 import copy
@@ -6,31 +6,43 @@ import math
 import time
 from layout import Rectangle, Layout
 
-# QuadTree class is unchanged
 class QuadTree:
     def __init__(self, boundary, capacity=4):
-        self.boundary = boundary; self.capacity = capacity; self.rects = []; self.divided = False
+        self.boundary = boundary
+        self.capacity = capacity
+        self.rects = []
+        self.divided = False
+
     def subdivide(self):
         x, y, w, h = self.boundary.x, self.boundary.y, self.boundary.w, self.boundary.h
-        self.northeast = QuadTree(Rectangle(None, x + w / 4, y + h / 4, w / 2, h / 2), self.capacity)
-        self.northwest = QuadTree(Rectangle(None, x - w / 4, y + h / 4, w / 2, h / 2), self.capacity)
-        self.southeast = QuadTree(Rectangle(None, x + w / 4, y - h / 4, w / 2, h / 2), self.capacity)
-        self.southwest = QuadTree(Rectangle(None, x - w / 4, y - h / 4, w / 2, h / 2), self.capacity)
+        hw, hh = w / 2, h / 2
+        self.northeast = QuadTree(Rectangle(None, x + hw / 2, y - hh / 2, hw, hh), self.capacity)
+        self.northwest = QuadTree(Rectangle(None, x - hw / 2, y - hh / 2, hw, hh), self.capacity)
+        self.southeast = QuadTree(Rectangle(None, x + hw / 2, y + hh / 2, hw, hh), self.capacity)
+        self.southwest = QuadTree(Rectangle(None, x - hw / 2, y + hh / 2, hw, hh), self.capacity)
         self.divided = True
+
     def insert(self, rect):
-        if not self.boundary.intersects(rect): return False
-        if len(self.rects) < self.capacity: self.rects.append(rect); return True
+        if not self.boundary.intersects(rect):
+            return False
+        if len(self.rects) < self.capacity:
+            self.rects.append(rect)
+            return True
         else:
-            if not self.divided: self.subdivide()
+            if not self.divided:
+                self.subdivide()
             if self.northeast.insert(rect): return True
             if self.northwest.insert(rect): return True
             if self.southeast.insert(rect): return True
             if self.southwest.insert(rect): return True
+
     def query(self, range_rect):
         found = []
-        if not self.boundary.intersects(range_rect): return found
+        if not self.boundary.intersects(range_rect):
+            return found
         for r in self.rects:
-            if range_rect.intersects(r): found.append(r)
+            if range_rect.intersects(r):
+                found.append(r)
         if self.divided:
             found.extend(self.northeast.query(range_rect))
             found.extend(self.northwest.query(range_rect))
@@ -54,14 +66,14 @@ class LayoutGenerator:
     def _shake_components(self, rects, legalize=False):
         if legalize:
             print("--- 執行最終強制合法化 Shake... ---")
-            max_passes = 150 # A reasonable default for final legalization
+            max_passes = 150
         else:
             print("--- 觸發輕量 Shake... ---")
             max_passes = self.params['SHAKE_ITERATIONS']
         
         strength = self.params['SHAKE_STRENGTH']
-        
         current_rects = copy.deepcopy(rects)
+
         for pass_num in range(max_passes):
             boundary = Rectangle(None, self.params['CANVAS_WIDTH']/2, self.params['CANVAS_HEIGHT']/2, self.params['CANVAS_WIDTH'], self.params['CANVAS_HEIGHT'])
             qtree = QuadTree(boundary, 4)
@@ -75,7 +87,7 @@ class LayoutGenerator:
                 neighbors = qtree.query(r)
                 for neighbor in neighbors:
                     if r.id == neighbor.id: continue
-                    dx = r.x - neighbor.x; dy = r.y - neighbor.y
+                    dx, dy = r.x - neighbor.x, r.y - neighbor.y
                     overlap_x = (r.w / 2 + neighbor.w / 2) - abs(dx)
                     overlap_y = (r.h / 2 + neighbor.h / 2) - abs(dy)
                     if overlap_x > 0 and overlap_y > 0:
@@ -93,12 +105,14 @@ class LayoutGenerator:
             
             for r in movable_rects:
                 vec = shake_vectors[r.id]
-                r.x += vec[0] * strength; r.y += vec[1] * strength
+                r.x += vec[0] * strength
+                r.y += vec[1] * strength
                 r.x = max(r.w / 2, min(r.x, self.params['CANVAS_WIDTH'] - r.w / 2))
                 r.y = max(r.h / 2, min(r.y, self.params['CANVAS_HEIGHT'] - r.h / 2))
 
         if legalize and total_overlaps > 0:
             print(f"--- 警告：最終合法化在 {max_passes} 輪後結束，仍有 {total_overlaps} 個重疊。 ---")
+        
         return current_rects
 
     def _infill_empty_spaces(self, rects):
@@ -115,31 +129,55 @@ class LayoutGenerator:
         if not empty_points:
             print("--- 警告：找不到任何空白點可供填充。 ---")
             return rects, False
+            
         new_points = random.sample(empty_points, min(num_to_add, len(empty_points)))
         max_id = max(r.id for r in rects) if rects else -1
+        
+        std_cell_def = self.params.get('component_types', {}).get('std_cell', {})
+        growth_range = std_cell_def.get('growth_prob_range', [0.1, 0.4])
+        
         for idx, (px, py) in enumerate(new_points):
-            prob = random.uniform(self.params['STD_CELL_GROWTH_PROB_RANGE'][0], self.params['STD_CELL_GROWTH_PROB_RANGE'][1])
-            rects.append(Rectangle(max_id + 1 + idx, px, py, 1, 1, prob))
+            prob = random.uniform(growth_range[0], growth_range[1])
+            new_rect = Rectangle(
+                rect_id=max_id + 1 + idx, x=px, y=py, w=1, h=1, 
+                growth_prob=prob, component_type='std_cell'
+            )
+            rects.append(new_rect)
+            
         print(f"--- 成功加入 {len(new_points)} 個新元件！ ---")
         return rects, True
 
     def generate(self):
         p = self.params
-        print(f"開始生成佈局...")
+        print("開始生成佈局...")
         start_time = time.time()
         
         rects = p.get('initial_rects', [])
         if not rects:
-            num_macros = int(p['NUM_RECTANGLES'] * p['MACRO_RATIO'])
-            for i in range(p['NUM_RECTANGLES']):
-                prob = (random.uniform(*p['MACRO_GROWTH_PROB_RANGE']) if i < num_macros 
-                        else random.uniform(*p['STD_CELL_GROWTH_PROB_RANGE']))
-                rects.append(Rectangle(i, random.uniform(0, p['CANVAS_WIDTH']), 
-                                       random.uniform(0, p['CANVAS_HEIGHT']), 1, 1, prob))
+            print("警告: 未提供初始元件，將根據 component_types 生成。")
+            component_definitions = p.get('component_types', {})
+            types_to_generate = []
+            total_random_rects = p['NUM_RECTANGLES']
+            for type_name, definition in component_definitions.items():
+                count = int(total_random_rects * definition.get('proportion', 0))
+                types_to_generate.extend([type_name] * count)
+            while len(types_to_generate) < total_random_rects:
+                types_to_generate.append('std_cell')
+            random.shuffle(types_to_generate)
+            
+            max_id = -1
+            for component_type in types_to_generate:
+                type_def = component_definitions.get(component_type)
+                w, h = random.uniform(*type_def['width_range']), random.uniform(*type_def['height_range'])
+                prob = random.uniform(*type_def['growth_prob_range'])
+                max_id += 1
+                rects.append(Rectangle(max_id, random.uniform(w/2, p['CANVAS_WIDTH'] - w/2), 
+                                       random.uniform(h/2, p['CANVAS_HEIGHT'] - h/2), w, h, prob, component_type))
 
-        stagnation_counter = 0; shakes_since_last_infill = 0; infill_triggered_count = 0
-        growth_directions = ['right', 'left', 'down', 'up']
-
+        stagnation_counter = 0
+        shakes_since_last_infill = 0
+        infill_triggered_count = 0
+        
         for i in range(p['MAX_ITERATIONS']):
             changed_this_iteration = False
             movable_rects = [r for r in rects if not r.fixed]
@@ -148,41 +186,45 @@ class LayoutGenerator:
             for r in movable_rects:
                 if random.random() > r.growth_prob: continue
                 original_x, original_y, original_w, original_h = r.x, r.y, r.w, r.h
+                direction = random.choice(['right', 'left', 'down', 'up'])
                 
-                for direction in growth_directions:
-                    # The growth logic itself is fine
-                    if direction == 'right': r.w += p['GROWTH_STEP']; r.x += p['GROWTH_STEP'] / 2
-                    elif direction == 'left': r.w += p['GROWTH_STEP']; r.x -= p['GROWTH_STEP'] / 2
-                    elif direction == 'down': r.h += p['GROWTH_STEP']; r.y += p['GROWTH_STEP'] / 2
-                    elif direction == 'up': r.h += p['GROWTH_STEP']; r.y -= p['GROWTH_STEP'] / 2
-                    
-                    if (r.w / r.h > p['MAX_ASPECT_RATIO']) or (r.h / r.w > p['MAX_ASPECT_RATIO']):
-                        r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h; continue
-                    if (r.x - r.w/2 < 0 or r.x + r.w/2 > p['CANVAS_WIDTH'] or 
-                        r.y - r.h/2 < 0 or r.y + r.h/2 > p['CANVAS_HEIGHT']):
-                        r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h; continue
-                    
-                    # The simple, correct collision check
-                    collided = any(r.intersects(other_r) for other_r in rects if r.id != other_r.id)
-                    
-                    if collided:
-                        r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h
-                    else:
-                        changed_this_iteration = True; break
+                if direction == 'right': r.w += p['GROWTH_STEP']; r.x += p['GROWTH_STEP'] / 2
+                elif direction == 'left': r.w += p['GROWTH_STEP']; r.x -= p['GROWTH_STEP'] / 2
+                elif direction == 'down': r.h += p['GROWTH_STEP']; r.y += p['GROWTH_STEP'] / 2
+                else: r.h += p['GROWTH_STEP']; r.y -= p['GROWTH_STEP'] / 2
                 
+                if (r.w / r.h > p['MAX_ASPECT_RATIO']) or (r.h / r.w > p['MAX_ASPECT_RATIO']):
+                    r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h
+                    continue
+                if not (0 <= r.x - r.w/2 and r.x + r.w/2 <= p['CANVAS_WIDTH'] and 0 <= r.y - r.h/2 and r.y + r.h/2 <= p['CANVAS_HEIGHT']):
+                    r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h
+                    continue
+                
+                if any(r.intersects(other_r) for other_r in rects if r.id != other_r.id):
+                    r.x, r.y, r.w, r.h = original_x, original_y, original_w, original_h
+                else:
+                    changed_this_iteration = True
+            
             current_density = sum(r.w * r.h for r in rects) / (p['CANVAS_WIDTH'] * p['CANVAS_HEIGHT'])
             if (i + 1) % 50 == 0:
                 print(f"迭代 {i+1} | 密度: {current_density:.3%} | ...")
-            if current_density >= p['TARGET_DENSITY']: print(f"\n已達到目標密度 {p['TARGET_DENSITY']:.2%}"); break
+            if current_density >= p['TARGET_DENSITY']:
+                print(f"\n已達到目標密度 {p['TARGET_DENSITY']:.2%}")
+                break
 
             stagnation_counter = 0 if changed_this_iteration else stagnation_counter + 1
             if stagnation_counter >= p['SHAKE_TRIGGER_THRESHOLD']:
-                if stagnation_counter >= p['STAGNATION_LIMIT']: print(f"\n系統停滯超過 {p['STAGNATION_LIMIT']} 輪..."); break
+                if stagnation_counter >= p['STAGNATION_LIMIT']:
+                    print(f"\n系統停滯超過 {p['STAGNATION_LIMIT']} 輪...")
+                    break
                 if shakes_since_last_infill >= p['INFILL_TRIGGER_AFTER_N_SHAKES'] and infill_triggered_count < p['INFILL_MAX_TRIGGERS']:
                     rects, success = self._infill_empty_spaces(rects)
-                    if success: infill_triggered_count += 1; shakes_since_last_infill = 0
+                    if success:
+                        infill_triggered_count += 1
+                        shakes_since_last_infill = 0
                 else:
-                    rects = self._rollback_growth(rects); rects = self._shake_components(rects)
+                    rects = self._rollback_growth(rects)
+                    rects = self._shake_components(rects)
                     shakes_since_last_infill += 1
                 stagnation_counter = 0
                 
