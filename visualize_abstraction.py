@@ -25,9 +25,11 @@ def draw_detailed_view(ax, rects, pins, edges):
         group_type = r.get('group_type')
         if group_type == 'hierarchical':
             face_color = '#E1BEE7'; edge_color = '#6A1B9A' # 紫色系
-        elif group_type: # 任何其他非空的 group_type (即對稱群組)
+        elif group_type == 'aligned':
+            face_color = '#FFECB3'; edge_color = '#FF8F00' # 橘黃色系
+        elif group_type: # 對稱群組
             face_color = '#C8E6C9'; edge_color = '#2E7D32' # 綠色系
-        else:
+        else: # 標準元件
             face_color = '#BBDEFB'; edge_color = '#0D47A1' # 藍色系
         
         rect_patch = patches.Rectangle(
@@ -94,6 +96,8 @@ def draw_abstracted_view(ax, rects_data, pins, edges):
         group_type = rects_in_group[0].get('group_type')
         if group_type == 'hierarchical':
             edge_color = '#6A1B9A'; face_color = '#F3E5F5' # 紫色系
+        elif group_type == 'aligned':
+            edge_color = '#FF8F00'; face_color = '#FFF8E1' # 橘黃色系
         else: # 對稱群組
             edge_color = '#2E7D32'; face_color = '#E8F5E9' # 綠色系
             
@@ -149,9 +153,9 @@ def main():
     legend_patches = [
         patches.Patch(facecolor='#BBDEFB', edgecolor='#0D47A1', label='Standard Component'),
         patches.Patch(facecolor='#C8E6C9', edgecolor='#2E7D32', label='Symmetric Component'),
-        patches.Patch(facecolor='#E1BEE7', edgecolor='#6A1B9A', label='Hierarchical Group Component'),
-        patches.Patch(facecolor='#E8F5E9', edgecolor='#2E7D32', linestyle='--', label='Abstracted Symmetric Node'),
-        patches.Patch(facecolor='#F3E5F5', edgecolor='#6A1B9A', linestyle='--', label='Abstracted Hierarchical Node')
+        patches.Patch(facecolor='#FFECB3', edgecolor='#FF8F00', label='Aligned Component'),
+        patches.Patch(facecolor='#E1BEE7', edgecolor='#6A1B9A', label='Hierarchical Component'),
+        patches.Patch(facecolor='#FFF8E1', edgecolor='#FF8F00', linestyle='--', label='Abstracted Aligned Node')
     ]
     fig.legend(handles=legend_patches, loc='lower center', ncol=3, bbox_to_anchor=(0.5, 0.01), fontsize='medium')
 

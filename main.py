@@ -1,4 +1,4 @@
-# main.py (增加了階層式分組步驟)
+# main.py (增加了對齊元件生成階段)
 
 import random
 import numpy as np
@@ -10,20 +10,19 @@ import time
 from generator import LayoutGenerator
 from layout import Layout, Rectangle
 from symmetry import SymmetricGenerator
-from grouper import LayoutGrouper # ✨ 1. 導入新的 Grouper 類
+from alignment import AlignmentGenerator # ✨ 1. 導入新的 AlignmentGenerator
+from grouper import LayoutGrouper
 
+# ... (load_config 和 get_randomized_params 函式不變) ...
 def load_config(path='config.yaml'):
     with open(path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     return config
-
 def get_randomized_params(config):
     params = config['base_params'].copy()
-    # 複製所有設定區塊，以防萬一
     for key, value in config.items():
         if isinstance(value, dict):
             params.setdefault(key, value.copy())
-
     for key, rule in config.get('randomize_params', {}).items():
         if rule['type'] == 'randint':
             params[key] = random.randint(rule['low'], rule['high'])
@@ -34,8 +33,8 @@ def get_randomized_params(config):
             val2 = random.uniform(rule['low'][1], rule['high'][1])
             params[key] = (min(val1, val2), max(val1, val2))
     return params
-
 def save_layout_to_json(layout, params, filepath):
+    # ... (此函式不變) ...
     layout_data = {
         "canvas_width": layout.canvas_width, "canvas_height": layout.canvas_height,
         "rectangles": [ 
@@ -48,14 +47,11 @@ def save_layout_to_json(layout, params, filepath):
         "pins": [ { "id": pin.id, "parent_rect_id": pin.parent_rect.id, "rel_pos": pin.rel_pos } for r in layout.rectangles for pin in r.pins ],
         "edges": [ (pin1.id, pin2.id) for pin1, pin2 in layout.edges ]
     }
-    # 移除 params 中不適合序列化的項目
     if 'initial_rects' in params:
         del params['initial_rects']
-        
     full_data = { "generation_params": params, "layout_data": layout_data }
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(full_data, f, ensure_ascii=False, indent=2)
-
 
 def main():
     config = load_config('config.yaml')
@@ -79,15 +75,27 @@ def main():
         last_id = -1
         last_pin_id = 0 
         
+        # 階段 A: 生成對稱群組
         if params.get('analog_symmetry_settings', {}).get('enable', False):
             sym_gen = SymmetricGenerator(params)
-            new_symmetric_rects, last_id, last_pin_id = sym_gen.generate_analog_groups(
+            _, last_id, last_pin_id = sym_gen.generate_analog_groups(
                 start_id=0, start_pin_id=0, existing_rects=placed_rects
             )
         
+        # ✨ 2. 新增階段 B: 生成對齊群組
+        if params.get('alignment_settings', {}).get('enable', False):
+            align_gen = AlignmentGenerator(params)
+            # 注意：對齊元件目前不生成 Pin，所以我們只關心 last_id
+            _, last_id = align_gen.generate_aligned_sets(
+                start_id=last_id + 1,
+                existing_rects=placed_rects
+            )
+
+        # 階段 C: 放置隨機元件
         print(f"\n--- 開始生成其餘 {params['NUM_RECTANGLES']} 個隨機填充元件 ---")
         num_macros = int(params['NUM_RECTANGLES'] * params['MACRO_RATIO'])
         for j in range(params['NUM_RECTANGLES']):
+            # ... (此迴圈不變) ...
             is_placed = False
             for _ in range(200):
                 rand_x = random.uniform(1, params['CANVAS_WIDTH'] - 1)
@@ -106,14 +114,16 @@ def main():
 
         params['initial_rects'] = placed_rects
         
+        # ✨ 3. 將所有已放置的元件傳遞給 LayoutGenerator
         generator = LayoutGenerator(params)
         final_layout = generator.generate()
 
-        # ✨ 2. 在佈局生成後，應用階層式分組
+        # 階段 D: 階層式分組
         if params.get('grouping_settings', {}).get('enable', False):
             grouper = LayoutGrouper(final_layout, params)
             final_layout = grouper.create_hierarchical_groups()
 
+        # 階段 E: 生成 Pin 和 Edge
         if final_layout:
             final_layout.generate_pins(
                 k=params['PIN_DENSITY_K'], 

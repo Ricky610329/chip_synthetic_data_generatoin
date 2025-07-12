@@ -29,22 +29,21 @@ def visualize_and_analyze(data):
     pins_map = {p['id']: p for p in all_pins}
     
     # ✨ 1. 修改顏色邏輯以區分三種類型
-    print("繪製元件 (標準、對稱、階層)...")
+    print("繪製元件 (標準、對稱、對齊、階層)...")
     for r in all_rects:
         x, y, w, h = r['x'] - r['w']/2, r['y'] - r['h']/2, r['w'], r.get('h', r['w'])
         group_type = r.get('group_type')
 
         if group_type == 'hierarchical':
-            # 新的階層式群組使用紫色系
-            face_color = '#E1BEE7'; edge_color = '#6A1B9A'
+            face_color = '#E1BEE7'; edge_color = '#6A1B9A' # 紫色系
+        elif group_type == 'aligned':
+            face_color = '#FFECB3'; edge_color = '#FF8F00' # 橘黃色系
         elif group_type in ['vertical', 'horizontal', 'quad']:
-            # 對稱群組使用綠色系 (或您喜歡的其他顏色)
-            face_color = '#C8E6C9'; edge_color = '#2E7D32'
-        else:
-            # 標準元件使用藍色系
+            face_color = '#C8E6C9'; edge_color = '#2E7D32' # 綠色系
+        else: # 標準元件
             is_macro = r['growth_prob'] >= params.get('MACRO_GROWTH_PROB_RANGE', [0.7, 0.9])[0]
             face_color = '#BBDEFB' if is_macro else '#E3F2FD'
-            edge_color = '#0D47A1'
+            edge_color = '#0D47A1' # 藍色系
 
         rect_patch = patches.Rectangle((x, y), w, h, linewidth=1.5, edgecolor=edge_color, facecolor=face_color, alpha=0.8, zorder=2)
         ax.add_patch(rect_patch)
@@ -77,6 +76,7 @@ def visualize_and_analyze(data):
     legend_patches = [
         patches.Patch(facecolor='#BBDEFB', edgecolor='#0D47A1', label='Standard Component'),
         patches.Patch(facecolor='#C8E6C9', edgecolor='#2E7D32', label='Symmetric Component'),
+        patches.Patch(facecolor='#FFECB3', edgecolor='#FF8F00', label='Aligned Component'),
         patches.Patch(facecolor='#E1BEE7', edgecolor='#6A1B9A', label='Hierarchical Group Component')
     ]
     ax.legend(handles=legend_patches, loc='upper right', fontsize='small')

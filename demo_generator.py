@@ -69,10 +69,12 @@ def save_frame(rects, params, title, is_final=False):
         group_type = r.group_type
 
         if group_type == 'hierarchical':
-            face_color = '#E1BEE7'; edge_color = '#6A1B9A'; alpha = 1.0
-        elif group_type: # Covers 'vertical', 'horizontal', 'quad'
-            face_color = 'mediumseagreen'; edge_color = 'darkgreen'; alpha = 1.0
-        else:
+            face_color = '#E1BEE7'; edge_color = '#6A1B9A' # 紫色系
+        elif group_type == 'aligned':
+            face_color = '#FFECB3'; edge_color = '#FF8F00' # 橘黃色系
+        elif group_type: # 對稱群組
+            face_color = 'mediumseagreen'; edge_color = 'darkgreen'
+        else: # 標準元件
             is_macro = r.growth_prob >= params.get('MACRO_GROWTH_PROB_RANGE', [0.7, 0.9])[0]
             face_color = 'skyblue' if is_macro else 'lightcoral'; edge_color = 'black'; alpha = 0.9
 
