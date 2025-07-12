@@ -8,6 +8,9 @@ import multiprocessing
 from collections import defaultdict
 
 def get_node_definition(rects_in_node, node_idx):
+    """根據一組矩形計算抽象節點的屬性。"""
+    if not rects_in_node:
+        return None
     min_x = min(r['x'] - r['w']/2 for r in rects_in_node)
     max_x = max(r['x'] + r['w']/2 for r in rects_in_node)
     min_y = min(r['y'] - r['h']/2 for r in rects_in_node)
@@ -40,68 +43,40 @@ def format_one_file(json_path):
         rect_map = {r['id']: r for r in rects_data}
         pins_map = {p['id']: p for p in layout.get('pins', [])}
 
-        # 節點抽象化 (Node Abstraction)
-        node_defs = []
-        rect_id_to_node_idx = {}
+        node_defs, rect_id_to_node_idx, processed_rect_ids = [], {}, set()
         node_idx_counter = 0
-        
-        processed_rect_ids = set()
 
-        # 建立約束 ID 到矩形列表的對應
         constraint_map = defaultdict(lambda: defaultdict(list))
         for r in rects_data:
-            for c_type, c_id in r.get('constraints', {}).items():
-                 constraint_map[c_type][c_id].append(r)
+            constraints = r.get('constraints', {})
+            if 'symmetry_id' in constraints:
+                constraint_map['symmetry_id'][constraints['symmetry_id']].append(r)
         
-        # 優先處理對稱群組
         if 'symmetry_id' in constraint_map:
-            for sym_id, rects_in_group in constraint_map['symmetry_id'].items():
+            for rects_in_group in constraint_map['symmetry_id'].values():
                 node_def = get_node_definition(rects_in_group, node_idx_counter)
+                if not node_def: continue
                 node_defs.append(node_def)
                 for r_id in node_def['contained_rect_ids']:
                     rect_id_to_node_idx[r_id] = node_idx_counter
                     processed_rect_ids.add(r_id)
                 node_idx_counter += 1
 
-        # 處理剩餘的對齊群組
-        if 'alignment_id' in constraint_map:
-            for align_id, rects_in_group in constraint_map['alignment_id'].items():
-                unprocessed_rects = [r for r in rects_in_group if r['id'] not in processed_rect_ids]
-                if not unprocessed_rects: continue
-                node_def = get_node_definition(unprocessed_rects, node_idx_counter)
-                node_defs.append(node_def)
-                for r_id in node_def['contained_rect_ids']:
-                    rect_id_to_node_idx[r_id] = node_idx_counter
-                    processed_rect_ids.add(r_id)
-                node_idx_counter += 1
-        
-        # 處理剩餘的階層群組
-        if 'grouping_id' in constraint_map:
-            for group_id, rects_in_group in constraint_map['grouping_id'].items():
-                unprocessed_rects = [r for r in rects_in_group if r['id'] not in processed_rect_ids]
-                if not unprocessed_rects: continue
-                node_def = get_node_definition(unprocessed_rects, node_idx_counter)
-                node_defs.append(node_def)
-                for r_id in node_def['contained_rect_ids']:
-                    rect_id_to_node_idx[r_id] = node_idx_counter
-                    processed_rect_ids.add(r_id)
-                node_idx_counter += 1
-
-        # 處理所有剩餘的單一元件
         for r in rects_data:
             if r['id'] not in processed_rect_ids:
                 node_def = get_node_definition([r], node_idx_counter)
+                if not node_def: continue
                 node_defs.append(node_def)
                 rect_id_to_node_idx[r['id']] = node_idx_counter
+                processed_rect_ids.add(r['id'])
                 node_idx_counter += 1
-
+        
         node_idx_to_def = {n['node_idx']: n for n in node_defs}
 
         p = [[n['w'] / canvas_w, n['h'] / canvas_h] for n in node_defs]
         target = [[(n['center_x'] / canvas_w * 2) - 1, (n['center_y'] / canvas_h * 2) - 1] for n in node_defs]
-        sub_components_list = [n['sub_components'] for n in node_defs]
         
-        netlist_edges, alignment_edges, group_edges = [], [], []
+        basic_component_edges, alignment_edges, group_edges = [], [], []
 
         for pin1_id, pin2_id in layout.get('netlist_edges', []):
             pin1, pin2 = pins_map.get(pin1_id), pins_map.get(pin2_id)
@@ -116,56 +91,60 @@ def format_one_file(json_path):
             pin2_abs_x, pin2_abs_y = dst_rect['x'] + pin2['rel_pos'][0], dst_rect['y'] + pin2['rel_pos'][1]
             sx, sy = (pin1_abs_x - src_node_def['center_x']) / canvas_w, (pin1_abs_y - src_node_def['center_y']) / canvas_h
             dx, dy = (pin2_abs_x - dst_node_def['center_x']) / canvas_w, (pin2_abs_y - dst_node_def['center_y']) / canvas_h
-            netlist_edges.append([[src_node_idx, dst_node_idx], [sx, sy, dx, dy]])
-            netlist_edges.append([[dst_node_idx, src_node_idx], [dx, dy, sx, sy]])
+            basic_component_edges.append([[src_node_idx, dst_node_idx], [sx, sy, dx, dy]])
 
-        align_map = {"left": 0, "right": 1, "top": 2, "bottom": 3, "h_center": 4, "v_center": 5}
+        our_align_map = {"left": 0, "right": 1, "top": 2, "bottom": 3, "h_center": 4, "v_center": 5}
         for id1, id2, align_type in layout.get('alignment_constraints', []):
             node1_idx, node2_idx = rect_id_to_node_idx.get(id1), rect_id_to_node_idx.get(id2)
             if node1_idx is None or node2_idx is None or node1_idx == node2_idx: continue
-            feature_vec = [0] * len(align_map)
-            if align_type in align_map: feature_vec[align_map[align_type]] = 1
+            feature_vec = [0.0] * 6
+            if align_type in our_align_map: feature_vec[our_align_map[align_type]] = 1.0
             alignment_edges.append([[node1_idx, node2_idx], feature_vec])
-            alignment_edges.append([[node2_idx, node1_idx], feature_vec])
 
         for group in layout.get('hierarchical_group_constraints', []):
-            for i in range(len(group)):
-                for j in range(i + 1, len(group)):
-                    id1, id2 = group[i], group[j]
-                    node1_idx, node2_idx = rect_id_to_node_idx.get(id1), rect_id_to_node_idx.get(id2)
-                    if node1_idx is None or node2_idx is None or node1_idx == node2_idx: continue
-                    group_edges.append([[node1_idx, node2_idx], [1]])
-                    group_edges.append([[node2_idx, node1_idx], [1]])
+            node_indices_in_group = list(set(rect_id_to_node_idx[r_id] for r_id in group if r_id in rect_id_to_node_idx))
+            for i in range(len(node_indices_in_group)):
+                for j in range(i + 1, len(node_indices_in_group)):
+                    node1_idx, node2_idx = node_indices_in_group[i], node_indices_in_group[j]
+                    if node1_idx == node2_idx: continue
+                    group_edges.append([[node1_idx, node2_idx], [1.0]])
 
         return os.path.basename(json_path), {
-            "nodes": {"p": p, "sub_components": sub_components_list},
-            "edges": { "basic_component_edge": netlist_edges, "align_edge": alignment_edges, "group_edge": group_edges },
-            "target": target
+            "node": p, "target": target,
+            "edges": {
+                "basic_component_edge": basic_component_edges,
+                "align_edge": alignment_edges,
+                "group_edge": group_edges,
+            },
+            "sub_components": [n['sub_components'] for n in node_defs]
         }
     except Exception as e:
         import traceback
         return os.path.basename(json_path), f"Error: {e}\n{traceback.format_exc()}"
 
 def main():
-    parser = argparse.ArgumentParser(description="Format raw layout JSONs into a clean, ML-ready JSON format.")
-    parser.add_argument("input_dir", type=str, help="Directory containing the raw layout JSON files.")
-    parser.add_argument("output_dir", type=str, help="Directory to save the formatted ML-ready JSON files.")
+    parser = argparse.ArgumentParser(description="Pre-process raw layout JSONs into a human-readable, ML-ready format.")
+    parser.add_argument("input_dir", type=str, help="Directory containing raw layout JSON files (e.g., 'raw_layouts_with_constraints').")
+    parser.add_argument("output_dir", type=str, help="Directory to save the formatted ML-ready JSON files (e.g., 'dataset_ml_ready').")
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     json_files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if f.endswith('.json')]
     
-    print(f"找到 {len(json_files)} 個原始佈局檔案。開始轉換為 ML 格式...")
-    
+    print(f"找到 {len(json_files)} 個原始佈局檔案。開始預處理...")
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
         results = list(tqdm(pool.imap_unordered(format_one_file, json_files), total=len(json_files)))
-        
-    for filename, data in results:
+    
+    print("\n預處理完成。開始寫入檔案...")
+    for filename, data in tqdm(results, desc="Writing files"):
         if isinstance(data, str):
-            print(f"--- 檔案: {filename} ---\n{data}\n--------------------")
+            print(f"--- 檔案處理失敗: {filename} ---\n{data}\n--------------------")
         else:
             output_path = os.path.join(args.output_dir, filename.replace('layout_', 'ml_formatted_'))
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+                # ✨ 核心修改: 加入 indent=2 參數來美化輸出
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"\n所有資料已成功格式化並儲存至 '{args.output_dir}'")
 
 if __name__ == '__main__':
     main()
