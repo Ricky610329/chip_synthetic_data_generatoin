@@ -1,9 +1,19 @@
 # config.yaml (已更新為明確的 component_types)
 
-# --- Generation Task Settings ---
+# ===================================================================
+# Path Settings
+# ===================================================================
+path_settings:
+  # main.py 的輸出目錄，存放未經處理的原始佈局檔案
+  raw_output_directory: "raw_layouts_with_constraints"
+  # format_for_ml.py 的輸出目錄，存放格式化後的最終檔案
+  ml_ready_output_directory: "dataset_ml_ready"
+
+# ===================================================================
+# Generation Task Settings
+# ===================================================================
 run_settings:
   num_samples_to_generate: 5
-  output_directory: "dataset_ml_ready"
 
 # ===================================================================
 # Component Type Settings

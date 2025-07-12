@@ -1,4 +1,4 @@
-# main.py
+# main.py (已修改為從 config 讀取路徑)
 
 import random
 import numpy as np
@@ -50,9 +50,14 @@ def save_layout_to_json(layout, params, filepath):
 def main():
     config = load_config('config.yaml')
     run_settings = config['run_settings']
+    path_settings = config['path_settings'] # ✨ 新增：讀取路徑設定
+    
     num_samples = run_settings['num_samples_to_generate']
-    output_dir = "raw_layouts_with_constraints"
+    
+    # ✨ 核心修改：使用 config 中定義的 raw_output_directory，而不是硬編碼
+    output_dir = path_settings['raw_output_directory']
     os.makedirs(output_dir, exist_ok=True)
+    print(f"原始佈局檔案將儲存至: '{output_dir}'")
 
     for i in range(num_samples):
         start_time, sample_id = time.time(), i + 1

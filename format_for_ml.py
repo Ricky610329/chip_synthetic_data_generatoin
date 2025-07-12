@@ -1,4 +1,4 @@
-# format_for_ml.py
+# format_for_ml.py (已修改為從 config 讀取路徑)
 
 import json
 import os
@@ -6,6 +6,13 @@ import argparse
 from tqdm import tqdm
 import multiprocessing
 from collections import defaultdict
+import yaml # ✨ 新增：匯入 yaml 模組
+
+# ✨ 新增：讀取設定檔的輔助函式
+def load_config(path='config.yaml'):
+    """載入 YAML 設定檔。"""
+    with open(path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
 
 def get_node_definition(rects_in_node, node_idx):
     """根據一組矩形計算抽象節點的屬性。"""
@@ -123,14 +130,26 @@ def format_one_file(json_path):
         return os.path.basename(json_path), f"Error: {e}\n{traceback.format_exc()}"
 
 def main():
-    parser = argparse.ArgumentParser(description="Pre-process raw layout JSONs into a human-readable, ML-ready format.")
-    parser.add_argument("input_dir", type=str, help="Directory containing raw layout JSON files (e.g., 'raw_layouts_with_constraints').")
-    parser.add_argument("output_dir", type=str, help="Directory to save the formatted ML-ready JSON files (e.g., 'dataset_ml_ready').")
-    args = parser.parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
-    json_files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if f.endswith('.json')]
+    # ✨ 核心修改：移除 argparse，改為從 config.yaml 讀取路徑
+    config = load_config()
+    path_settings = config['path_settings']
+    input_dir = path_settings['raw_output_directory']
+    output_dir = path_settings['ml_ready_output_directory']
     
-    print(f"找到 {len(json_files)} 個原始佈局檔案。開始預處理...")
+    print(f"讀取設定檔: '{os.path.abspath('config.yaml')}'")
+    print(f"輸入目錄 (raw layouts): '{input_dir}'")
+    print(f"輸出目錄 (ML-ready): '{output_dir}'")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if not os.path.isdir(input_dir) or not os.listdir(input_dir):
+        print(f"\n錯誤：輸入目錄 '{input_dir}' 不存在或為空。")
+        print("請先執行 main.py 來生成原始佈局檔案。")
+        return
+
+    json_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.json')]
+    
+    print(f"\n找到 {len(json_files)} 個原始佈局檔案。開始預處理...")
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
         results = list(tqdm(pool.imap_unordered(format_one_file, json_files), total=len(json_files)))
     
@@ -139,12 +158,11 @@ def main():
         if isinstance(data, str):
             print(f"--- 檔案處理失敗: {filename} ---\n{data}\n--------------------")
         else:
-            output_path = os.path.join(args.output_dir, filename.replace('layout_', 'ml_formatted_'))
+            output_path = os.path.join(output_dir, filename.replace('layout_', 'formatted_'))
             with open(output_path, 'w', encoding='utf-8') as f:
-                # ✨ 核心修改: 加入 indent=2 參數來美化輸出
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-    print(f"\n所有資料已成功格式化並儲存至 '{args.output_dir}'")
+    print(f"\n所有資料已成功格式化並儲存至 '{output_dir}'")
 
 if __name__ == '__main__':
     main()
