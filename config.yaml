@@ -10,13 +10,13 @@ run_settings:
 # ===================================================================
 component_types:
   macro:
-    proportion: 0.15  # 10% 的隨機元件將是 Macro
+    proportion: 0.1  # 10% 的隨機元件將是 Macro
     # Macro 的尺寸明顯大於 Standard Cell
     width_range: [80, 200]
     height_range: [80, 200]
     growth_prob_range: [0.7, 0.95] # Macro 依然有較高的生長意願
   std_cell:
-    proportion: 0.85  # 90% 的隨機元件將是 Standard Cell
+    proportion: 0.9  # 90% 的隨機元件將是 Standard Cell
     # Standard Cell 的尺寸較小
     width_range: [10, 30]
     height_range: [10, 30]
@@ -36,10 +36,9 @@ alignment_settings:
     type: "randint"
     low: 2
     high: 4
-  # 對齊元件的大小範圍
-  component_width_range: [20, 50]
-  component_height_range: [40, 80]
-  # 對齊元件之間的間隙範圍
+  # 新增: 0.2 表示 20% 的對齊群組將由 Macro 組成
+  macro_proportion: 0.8
+  # 對齊群組中的元件尺寸將從上面的 component_types 中讀取
   gap_range: [2, 8]
   # 各種對齊模式的權重，用於隨機選擇
   alignment_mode_weights:
@@ -57,11 +56,12 @@ analog_symmetry_settings:
     type: "randint"
     low: 2
     high: 4
+  # 新增: 0.3 表示 30% 的對稱群組將由 Macro 組成
+  macro_proportion: 0.8
   group_configs:
     - { rects_per_group: 2, group_axis: "vertical", weight: 3 }
     - { rects_per_group: 2, group_axis: "horizontal", weight: 2 }
-  component_width_range: [50, 100]
-  component_height_range: [50, 100]
+  # 對稱群組中的元件尺寸將從上面的 component_types 中讀取
   group_gap_range: [4, 10]
 
 # --- Hierarchical Grouping Settings ---
@@ -94,15 +94,14 @@ base_params:
   INFILL_COMPONENT_COUNT: 10
   INFILL_GRID_DENSITY: 50
   INFILL_MAX_TRIGGERS: 3
-  PIN_DENSITY_K: 0.01
-  EDGE_P_MAX: 0.6
-  PIN_EDGE_MARGIN_RATIO: 0.1
   # 以下兩個參數現在是唯一控制引腳數量的參數
   PIN_DENSITY_K: 0.01
   EDGE_P_MAX: 0.6
   MAX_WIRELENGTH_LIMIT: 500
   # 新增: Pin 在邊緣的範圍比例。0.1 表示在離邊緣 10% 的寬度/高度範圍內生成。
   PIN_EDGE_MARGIN_RATIO: 0.1
+  # 新增: K-最近鄰的 K 值，控制 Netlist 密度
+  EDGE_K_NEAREST_NEIGHBORS: 15
 
 # --- Parameters to Randomize ---
 randomize_params:

@@ -31,9 +31,15 @@ def get_randomized_params(config):
 def save_layout_to_json(layout, params, filepath):
     layout_data = {
         "canvas_width": layout.canvas_width, "canvas_height": layout.canvas_height,
-        "rectangles": [ { "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h, "growth_prob": r.growth_prob, "fixed": r.fixed, "group_id": r.group_id, "group_type": r.group_type, "component_type": r.component_type } for r in layout.rectangles ],
+        "rectangles": [ {
+            "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h,
+            "growth_prob": r.growth_prob, "fixed": r.fixed,
+            "constraints": r.constraints, "component_type": r.component_type
+        } for r in layout.rectangles ],
         "pins": [ { "id": pin.id, "parent_rect_id": pin.parent_rect.id, "rel_pos": pin.rel_pos } for r in layout.rectangles for pin in r.pins ],
-        "netlist_edges": layout.edges, "alignment_constraints": layout.alignment_constraints, "hierarchical_group_constraints": layout.hierarchical_group_constraints,
+        "netlist_edges": layout.edges,
+        "alignment_constraints": layout.alignment_constraints,
+        "hierarchical_group_constraints": layout.hierarchical_group_constraints,
     }
     if 'initial_rects' in params:
         del params['initial_rects']
@@ -59,20 +65,17 @@ def main():
         placed_rects, alignment_constraints = [], []
         last_id, last_pin_id = -1, 0
         
-        # 階段 A: 對稱群組生成，現在會返回 pin_id
         if params.get('analog_symmetry_settings', {}).get('enable', False):
             sym_gen = SymmetricGenerator(params)
             _, last_id, last_pin_id = sym_gen.generate_analog_groups(
                 start_id=0, start_pin_id=0, existing_rects=placed_rects)
         
-        # 階段 B: 對齊群組生成，它不處理引腳
         if params.get('alignment_settings', {}).get('enable', False):
             align_gen = AlignmentGenerator(params)
             _, new_constraints, last_id = align_gen.generate_aligned_sets(
                 start_id=last_id + 1, existing_rects=placed_rects)
             alignment_constraints.extend(new_constraints)
 
-        # 階段 C: 放置隨機元件
         print(f"\n--- 開始生成 {params['NUM_RECTANGLES']} 個隨機 Macro 和 Standard Cell ---")
         component_definitions = params.get('component_types', {})
         types_to_generate = []
@@ -101,14 +104,13 @@ def main():
         
         generator = LayoutGenerator(params)
         final_layout = generator.generate()
-        final_layout.alignment_constraints = alignment_constraints
         
-        if params.get('grouping_settings', {}).get('enable', False):
-            grouper = LayoutGrouper(final_layout, params)
-            final_layout = grouper.create_hierarchical_groups()
-
         if final_layout:
-            # 階段 F: 統一生成引腳，傳入來自對稱階段的 last_pin_id
+            final_layout.alignment_constraints = alignment_constraints
+            if params.get('grouping_settings', {}).get('enable', False):
+                grouper = LayoutGrouper(final_layout, params)
+                final_layout = grouper.create_hierarchical_groups()
+
             final_layout.generate_pins(
                 k=params['PIN_DENSITY_K'], 
                 p=params['RENT_EXPONENT_P'], 
@@ -118,7 +120,8 @@ def main():
             final_layout.generate_edges(
                 p_max=params['EDGE_P_MAX'], 
                 decay_rate=params['EDGE_DECAY_RATE'],
-                max_length_limit=params['MAX_WIRELENGTH_LIMIT']
+                max_length_limit=params['MAX_WIRELENGTH_LIMIT'],
+                k_neighbors=params['EDGE_K_NEAREST_NEIGHBORS']
             )
             output_filepath = os.path.join(output_dir, f"layout_{sample_id}.json")
             save_layout_to_json(final_layout, params, output_filepath)

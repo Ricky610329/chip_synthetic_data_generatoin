@@ -8,6 +8,7 @@ class SymmetricGenerator:
     def __init__(self, main_params):
         self.params = main_params
         self.analog_config = main_params['analog_symmetry_settings']
+        self.comp_types_config = main_params['component_types']
         self.canvas_w = main_params['CANVAS_WIDTH']
         self.canvas_h = main_params['CANVAS_HEIGHT']
         self.pin_edge_margin_ratio = self.params.get('PIN_EDGE_MARGIN_RATIO', 0.1)
@@ -38,33 +39,40 @@ class SymmetricGenerator:
         return pins, current_pin_id
 
     def _generate_rects_for_group_at_center(self, config, center_x, center_y, start_id, start_pin_id, group_id):
+        comp_type = 'macro' if random.random() < self.analog_config.get('macro_proportion', 0.1) else 'std_cell'
+        type_def = self.comp_types_config[comp_type]
+        
         rects_per_group = config['rects_per_group']
         axis = config['group_axis']
         generated_rects = []
         current_id = start_id
         current_pin_id = start_pin_id
 
-        def _set_group_properties(rect):
+        def _set_properties(rect, sym_id, sym_axis):
             rect.fixed = True
-            rect.group_id = group_id
-            rect.group_type = axis
+            rect.constraints['symmetry_id'] = sym_id
+            rect.constraints['symmetry_axis'] = sym_axis
             return rect
 
         if rects_per_group == 2:
-            w = random.uniform(*self.analog_config['component_width_range'])
-            h = random.uniform(*self.analog_config['component_height_range'])
+            w = random.uniform(*type_def['width_range'])
+            h = random.uniform(*type_def['height_range'])
+            growth_prob = random.uniform(*type_def['growth_prob_range'])
             gap_mirror = random.uniform(*self.analog_config['group_gap_range'])
             
             if axis == 'vertical':
                 base_x, base_y = center_x - gap_mirror / 2 - w / 2, center_y
                 mirror_x = center_x + gap_mirror / 2 + w / 2
-                base_rect = _set_group_properties(Rectangle(current_id, base_x, base_y, w, h))
-                mirror_rect = _set_group_properties(Rectangle(current_id + 1, mirror_x, base_y, w, h))
+                base_rect = Rectangle(current_id, base_x, base_y, w, h, growth_prob, comp_type)
+                mirror_rect = Rectangle(current_id + 1, mirror_x, base_y, w, h, growth_prob, comp_type)
             else: # horizontal
                 base_x, base_y = center_x, center_y - gap_mirror / 2 - h / 2
                 mirror_y = center_y + gap_mirror / 2 + h / 2
-                base_rect = _set_group_properties(Rectangle(current_id, base_x, base_y, w, h))
-                mirror_rect = _set_group_properties(Rectangle(current_id + 1, base_x, mirror_y, w, h))
+                base_rect = Rectangle(current_id, base_x, base_y, w, h, growth_prob, comp_type)
+                mirror_rect = Rectangle(current_id + 1, base_x, mirror_y, w, h, growth_prob, comp_type)
+
+            _set_properties(base_rect, group_id, axis)
+            _set_properties(mirror_rect, group_id, axis)
 
             area = w * h
             num_pins = int(self.k * (area ** self.p))
@@ -79,7 +87,7 @@ class SymmetricGenerator:
                 mirror_rel_pos = (-rel_pos[0], rel_pos[1]) if axis == 'vertical' else (rel_pos[0], -rel_pos[1])
                 mirror_pin = Pin(temp_pin_id, mirror_rect, mirror_rel_pos)
                 mirror_pins.append(mirror_pin)
-                temp_pin_id +=1
+                temp_pin_id += 1
 
             mirror_rect.pins = mirror_pins
             current_pin_id = temp_pin_id
@@ -105,7 +113,6 @@ class SymmetricGenerator:
         for i in range(num_groups):
             group_id_str = f"sym_group_{i}"
             chosen_config = random.choices(group_choices, weights=weights, k=1)[0]
-            is_placed = False
             for _ in range(200):
                 center_x = random.uniform(150, self.canvas_w - 150)
                 center_y = random.uniform(150, self.canvas_h - 150)
@@ -120,12 +127,8 @@ class SymmetricGenerator:
                 newly_placed_rects.extend(potential_rects)
                 existing_rects.extend(potential_rects)
                 current_id, current_pin_id = next_id, next_pin_id
-                is_placed = True
                 break
-            
-            if not is_placed:
-                print(f"--- 警告：無法為對稱群組 {group_id_str} 找到足夠空間，已略過。 ---")
-
+        
         total_pins = sum(len(r.pins) for r in newly_placed_rects)
         print(f"--- 對稱群組生成完畢，共 {len(newly_placed_rects)} 個元件，{total_pins} 個引腳。 ---")
         return newly_placed_rects, current_id, current_pin_id
