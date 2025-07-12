@@ -1,4 +1,4 @@
-# main.py (增加了對齊元件生成階段)
+# main.py (已更新，整合對齊生成)
 
 import random
 import numpy as np
@@ -10,20 +10,21 @@ import time
 from generator import LayoutGenerator
 from layout import Layout, Rectangle
 from symmetry import SymmetricGenerator
-from alignment import AlignmentGenerator # ✨ 1. 導入新的 AlignmentGenerator
+from alignment import AlignmentGenerator # ✨ 導入 AlignmentGenerator
 from grouper import LayoutGrouper
 
-# ... (load_config 和 get_randomized_params 函式不變) ...
 def load_config(path='config.yaml'):
     with open(path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     return config
+
 def get_randomized_params(config):
     params = config['base_params'].copy()
     for key, value in config.items():
         if isinstance(value, dict):
             params.setdefault(key, value.copy())
     for key, rule in config.get('randomize_params', {}).items():
+        # ... (此函式不變) ...
         if rule['type'] == 'randint':
             params[key] = random.randint(rule['low'], rule['high'])
         elif rule['type'] == 'uniform':
@@ -33,10 +34,12 @@ def get_randomized_params(config):
             val2 = random.uniform(rule['low'][1], rule['high'][1])
             params[key] = (min(val1, val2), max(val1, val2))
     return params
+
 def save_layout_to_json(layout, params, filepath):
-    # ... (此函式不變) ...
+    # 此函式現在將儲存更豐富的佈局資訊
     layout_data = {
-        "canvas_width": layout.canvas_width, "canvas_height": layout.canvas_height,
+        "canvas_width": layout.canvas_width,
+        "canvas_height": layout.canvas_height,
         "rectangles": [ 
             { 
                 "id": r.id, "x": r.x, "y": r.y, "w": r.w, "h": r.h, 
@@ -45,10 +48,14 @@ def save_layout_to_json(layout, params, filepath):
             } for r in layout.rectangles 
         ],
         "pins": [ { "id": pin.id, "parent_rect_id": pin.parent_rect.id, "rel_pos": pin.rel_pos } for r in layout.rectangles for pin in r.pins ],
-        "edges": [ (pin1.id, pin2.id) for pin1, pin2 in layout.edges ]
+        "netlist_edges": layout.edges, # Pin-to-pin netlist
+        "alignment_constraints": layout.alignment_constraints,
+        "hierarchical_group_constraints": layout.hierarchical_group_constraints,
     }
+    
     if 'initial_rects' in params:
         del params['initial_rects']
+        
     full_data = { "generation_params": params, "layout_data": layout_data }
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(full_data, f, ensure_ascii=False, indent=2)
@@ -57,10 +64,10 @@ def main():
     config = load_config('config.yaml')
     run_settings = config['run_settings']
     num_samples = run_settings['num_samples_to_generate']
-    output_dir = run_settings['output_directory']
-
+    # 將輸出目錄更改為一個新的名稱，以避免與舊格式混淆
+    output_dir = "raw_layouts_with_constraints"
     os.makedirs(output_dir, exist_ok=True)
-    print(f"將在 '{output_dir}' 資料夾中生成 {num_samples} 個樣本...")
+    print(f"將在 '{output_dir}' 資料夾中生成 {num_samples} 個帶有完整約束的樣本...")
 
     for i in range(num_samples):
         start_time = time.time()
@@ -72,30 +79,32 @@ def main():
         random.seed(seed); np.random.seed(seed)
         
         placed_rects = []
+        alignment_constraints = []
         last_id = -1
         last_pin_id = 0 
         
-        # 階段 A: 生成對稱群組
+        # 階段 A: 生成對稱群組 (Symmetric)
         if params.get('analog_symmetry_settings', {}).get('enable', False):
             sym_gen = SymmetricGenerator(params)
+            # 對稱元件目前不返回顯式約束，它們的關係由共同的 group_id 隱含
             _, last_id, last_pin_id = sym_gen.generate_analog_groups(
                 start_id=0, start_pin_id=0, existing_rects=placed_rects
             )
         
-        # ✨ 2. 新增階段 B: 生成對齊群組
+        # 階段 B: 生成對齊群組 (Alignment)
         if params.get('alignment_settings', {}).get('enable', False):
             align_gen = AlignmentGenerator(params)
-            # 注意：對齊元件目前不生成 Pin，所以我們只關心 last_id
-            _, last_id = align_gen.generate_aligned_sets(
+            # 對齊元件不生成 Pin，所以我們只關心 last_id 和返回的約束
+            _, new_constraints, last_id = align_gen.generate_aligned_sets(
                 start_id=last_id + 1,
                 existing_rects=placed_rects
             )
+            alignment_constraints.extend(new_constraints)
 
         # 階段 C: 放置隨機元件
         print(f"\n--- 開始生成其餘 {params['NUM_RECTANGLES']} 個隨機填充元件 ---")
         num_macros = int(params['NUM_RECTANGLES'] * params['MACRO_RATIO'])
         for j in range(params['NUM_RECTANGLES']):
-            # ... (此迴圈不變) ...
             is_placed = False
             for _ in range(200):
                 rand_x = random.uniform(1, params['CANVAS_WIDTH'] - 1)
@@ -110,20 +119,23 @@ def main():
                     is_placed = True
                     break
             if not is_placed:
-                 print(f"--- 警告：無法為第 {j+1} 個隨機元件找到空間，已略過。 ---")
+                 print(f"--- 警告: 無法為第 {j+1} 個隨機元件找到空間，已略過。 ---")
 
         params['initial_rects'] = placed_rects
         
-        # ✨ 3. 將所有已放置的元件傳遞給 LayoutGenerator
+        # 階段 D: 生長與優化
         generator = LayoutGenerator(params)
         final_layout = generator.generate()
+        
+        # 將之前生成的約束加入到最終的 layout 物件中
+        final_layout.alignment_constraints = alignment_constraints
 
-        # 階段 D: 階層式分組
+        # 階段 E: 階層式分組 (Hierarchical Grouping)
         if params.get('grouping_settings', {}).get('enable', False):
             grouper = LayoutGrouper(final_layout, params)
-            final_layout = grouper.create_hierarchical_groups()
+            final_layout = grouper.create_hierarchical_groups() # grouper 內部會更新 layout 的約束
 
-        # 階段 E: 生成 Pin 和 Edge
+        # 階段 F: 生成 Pin 和 Netlist
         if final_layout:
             final_layout.generate_pins(
                 k=params['PIN_DENSITY_K'], 

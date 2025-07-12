@@ -1,20 +1,20 @@
-# config.yaml (增加了 grouping_settings)
+# config.yaml (增加了 alignment_settings)
 
 # --- Generation Task Settings ---
 run_settings:
-  num_samples_to_generate: 10
-  output_directory: "dataset_align"
+  num_samples_to_generate: 3
+  output_directory: "dataset_ml_ready"
 
 # ===================================================================
 # Alignment Settings
 # ===================================================================
 alignment_settings:
-  enable: true # 設定為 true 來啟用此功能
+  enable: false # 設定為 true 來啟用此功能
   # 要生成多少個對齊的元件集合
   num_sets:
     type: "randint"
     low: 3
-    high: 8
+    high: 6
   # 每個集合包含多少個元件
   components_per_set:
     type: "randint"
@@ -24,43 +24,45 @@ alignment_settings:
   component_width_range: [20, 50]
   component_height_range: [40, 80]
   # 對齊元件之間的間隙範圍
-  gap_range: [5, 10]
+  gap_range: [2, 8]
+  # 各種對齊模式的權重，用於隨機選擇
+  alignment_mode_weights:
+    - { mode: "left", weight: 1 }
+    - { mode: "right", weight: 1 }
+    - { mode: "top", weight: 1 }
+    - { mode: "bottom", weight: 1 }
+    - { mode: "h_center", weight: 2 }
+    - { mode: "v_center", weight: 2 }
 
 # --- Analog Symmetry Settings ---
 analog_symmetry_settings:
   enable: true
   num_groups:
     type: "randint"
-    low: 4
-    high: 8
+    low: 2
+    high: 4
   group_configs:
-    - { rects_per_group: 4, group_axis: "quad", weight: 1 }
-    - { rects_per_group: 2, group_axis: "vertical", weight: 3 }
-    - { rects_per_group: 2, group_axis: "horizontal", weight: 2 }
-    - { rects_per_group: 6, group_axis: "vertical", weight: 1 }
-    - { rects_per_group: 4, group_axis: "horizontal", weight: 1 }
-  component_width_range: [60, 120]
-  component_height_range: [80, 140]
+    - { rects_per_group: 2, group_axis: "vertical", weight: 1 }
+    - { rects_per_group: 2, group_axis: "horizontal", weight: 1 }
+  component_width_range: [50, 200]
+  component_height_range: [50, 200]
   group_gap_range: [4, 10]
-  pins_per_component: [2, 5]
+  pins_per_component: [2, 6]
 
-# ===================================================================
-# Hierarchical Grouping Settings
-# ===================================================================
+# --- Hierarchical Grouping Settings ---
 grouping_settings:
-  enable: true # 設定為 true 來啟用此功能
-  # 要嘗試建立多少個新的階層式群組
+  enable: true
+  method: "proximity"
   num_groups_to_create:
     type: "randint"
-    low: 3
-    high: 6
-  # 每個新群組應包含多少個「項目」(項目可以是單一元件或已存在的對稱群組)
+    low: 4
+    high: 8
   items_per_group:
     type: "randint"
     low: 2
-    high: 5
-  # 組成群組的方法，目前僅支援 "proximity" (鄰近度)
-  method: "proximity"
+    high: 4
+  # 限制群組搜尋半徑，避免將距離太遠的元件組在一起
+  max_search_radius: 150.0
 
 # --- Base Parameters (Fixed values) ---
 base_params:
@@ -85,8 +87,8 @@ base_params:
 randomize_params:
   NUM_RECTANGLES:
     type: "randint"
-    low: 180
-    high: 250
+    low: 150
+    high: 200
   TARGET_DENSITY:
     type: "uniform"
     low: 0.75

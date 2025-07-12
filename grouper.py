@@ -1,4 +1,4 @@
-# grouper.py (增加了最大搜尋半徑限制)
+# grouper.py (已更新，返回群組約束)
 
 import random
 import math
@@ -11,15 +11,16 @@ class LayoutGrouper:
         self.config = params['grouping_settings']
 
     def _get_placeable_items(self):
-        # ... (此內部函式不變) ...
+        # (此內部函式不變)
         items = []
         existing_groups = defaultdict(list)
         single_rects = []
         for r in self.layout.rectangles:
-            if r.group_id:
+            if r.group_id and r.group_type != 'hierarchical': # 只考慮底層群組
                 existing_groups[r.group_id].append(r)
-            else:
+            elif not r.group_id:
                 single_rects.append(r)
+        
         for group_id, rects_in_group in existing_groups.items():
             min_x = min(r.x - r.w/2 for r in rects_in_group)
             max_x = max(r.x + r.w/2 for r in rects_in_group)
@@ -28,20 +29,16 @@ class LayoutGrouper:
             center_x = (min_x + max_x) / 2
             center_y = (min_y + max_y) / 2
             items.append({
-                "id": group_id,
-                "center": (center_x, center_y),
-                "rect_ids": [r.id for r in rects_in_group],
-                "is_group": True
+                "id": group_id, "center": (center_x, center_y),
+                "rect_ids": [r.id for r in rects_in_group], "is_group": True
             })
+
         for r in single_rects:
             items.append({
-                "id": r.id,
-                "center": (r.x, r.y),
-                "rect_ids": [r.id],
-                "is_group": False
+                "id": r.id, "center": (r.x, r.y),
+                "rect_ids": [r.id], "is_group": False
             })
         return items
-
 
     def create_hierarchical_groups(self):
         if self.config['method'] != 'proximity':
@@ -52,16 +49,16 @@ class LayoutGrouper:
         num_groups_config = self.config['num_groups_to_create']
         num_groups_to_create = random.randint(num_groups_config['low'], num_groups_config['high'])
         
-        # ✨ 1. 從設定檔讀取最大搜尋半徑
         max_radius = self.config.get('max_search_radius', float('inf'))
 
         grouped_item_indices = set()
+        # ✨ 新增: 用於儲存新的群組關係
+        hierarchical_group_constraints = []
         print(f"\nAttempting to create {num_groups_to_create} hierarchical groups (max radius: {max_radius})...")
 
         for i in range(num_groups_to_create):
             available_indices = [idx for idx in range(len(items)) if idx not in grouped_item_indices]
-            if not available_indices:
-                break
+            if len(available_indices) < 2: break
 
             seed_idx = random.choice(available_indices)
             seed_item = items[seed_idx]
@@ -71,15 +68,12 @@ class LayoutGrouper:
             num_neighbors_to_find = items_per_group - 1
             if num_neighbors_to_find <= 0: continue
 
-            # 尋找鄰居
             distances = []
             for j in available_indices:
                 if j == seed_idx: continue
-                other_item = items[j]
-                dist = math.hypot(seed_item['center'][0] - other_item['center'][0], 
-                                  seed_item['center'][1] - other_item['center'][1])
+                dist = math.hypot(seed_item['center'][0] - items[j]['center'][0], 
+                                  seed_item['center'][1] - items[j]['center'][1])
                 
-                # ✨ 2. 只有在距離小於最大半徑時，才將其視為候選鄰居
                 if dist <= max_radius:
                     distances.append((dist, j))
             
@@ -88,22 +82,31 @@ class LayoutGrouper:
             
             new_group_members_indices = [seed_idx] + neighbors_indices
             if len(new_group_members_indices) < 2:
-                # 如果找不到足夠的近鄰，就放棄建立這個群組
-                print(f"  - Could not find enough neighbors for item {seed_item['id']} within radius. Skipping group formation.")
                 continue
 
-            # ... (建立新群組並更新屬性的邏輯不變) ...
             new_group_id = f"h_group_{i}"
-            member_ids_for_print = [items[idx]['id'] for idx in new_group_members_indices]
-            print(f"  - Creating group '{new_group_id}' with items: {member_ids_for_print}")
             all_rect_ids_in_new_group = set()
+            
+            # ✨ 收集這個新群組包含的所有底層 rectangle ID
+            rect_ids_for_this_group = []
             for member_idx in new_group_members_indices:
+                rect_ids_for_this_group.extend(items[member_idx]['rect_ids'])
                 all_rect_ids_in_new_group.update(items[member_idx]['rect_ids'])
+            
+            # 將這個群組關係加入到約束列表中
+            hierarchical_group_constraints.append(rect_ids_for_this_group)
+
+            print(f"  - Creating group '{new_group_id}' with items: {[items[idx]['id'] for idx in new_group_members_indices]}")
+            
+            # 更新 rectangle 屬性
             for r in self.layout.rectangles:
                 if r.id in all_rect_ids_in_new_group:
                     r.group_id = new_group_id
                     r.group_type = 'hierarchical'
+            
             grouped_item_indices.update(new_group_members_indices)
-
+        
+        # ✨ 將收集到的約束賦值給 layout 物件
+        self.layout.hierarchical_group_constraints = hierarchical_group_constraints
         print("--- Hierarchical grouping complete. ---")
         return self.layout
