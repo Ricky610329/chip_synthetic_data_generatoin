@@ -159,7 +159,7 @@
 5.  **(推薦) 視覺化檢查抽象結果**:
     -   執行 `python visualize_abstraction.py <path_to_original_json> <output_image_name.png>`，例如：
         ```bash
-        visualize_abstraction.py dataset_symmetry/layout_1.json abstraction_view_1.png
+        python visualize_abstraction.py dataset_symmetry/layout_1.json abstraction_view_1.png
         ```
     -   打開生成的圖片，確認左邊的詳細佈局與右邊的抽象化視圖符合預期。
 
