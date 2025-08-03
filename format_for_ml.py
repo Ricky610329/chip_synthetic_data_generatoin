@@ -6,7 +6,8 @@ import argparse
 from tqdm import tqdm
 import multiprocessing
 from collections import defaultdict
-import yaml # ✨ 新增：匯入 yaml 模組
+import yaml
+import functools
 
 # ✨ 新增：讀取設定檔的輔助函式
 def load_config(path='config.yaml'):
@@ -38,7 +39,14 @@ def get_node_definition(rects_in_node, node_idx):
         'contained_rect_ids': [r['id'] for r in rects_in_node]
     }
 
-def format_one_file(json_path):
+def format_one_file(json_path, output_dir):
+    """
+    處理單一檔案，並直接將結果寫入輸出目錄。
+    回傳一個元組 (檔名, 狀態訊息)。
+    """
+    filename = os.path.basename(json_path)
+    output_path = os.path.join(output_dir, filename.replace('layout_', 'formatted_'))
+    
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
@@ -116,7 +124,8 @@ def format_one_file(json_path):
                     if node1_idx == node2_idx: continue
                     group_edges.append([[node1_idx, node2_idx], [1.0]])
 
-        return os.path.basename(json_path), {
+        # 組裝最終要輸出的資料
+        result_data = {
             "node": p, "target": target,
             "edges": {
                 "basic_component_edge": basic_component_edges,
@@ -125,9 +134,17 @@ def format_one_file(json_path):
             },
             "sub_components": [n['sub_components'] for n in node_defs]
         }
+    
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+
+        return filename, "Success"
+    
     except Exception as e:
         import traceback
-        return os.path.basename(json_path), f"Error: {e}\n{traceback.format_exc()}"
+        # ✨ 回傳輕量級的錯誤訊息
+        error_message = f"Error: {e}\n{traceback.format_exc()}"
+        return filename, error_message
 
 def main():
     # ✨ 核心修改：移除 argparse，改為從 config.yaml 讀取路徑
@@ -150,19 +167,29 @@ def main():
     json_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.json')]
     
     print(f"\n找到 {len(json_files)} 個原始佈局檔案。開始預處理...")
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        results = list(tqdm(pool.imap_unordered(format_one_file, json_files), total=len(json_files)))
-    
-    print("\n預處理完成。開始寫入檔案...")
-    for filename, data in tqdm(results, desc="Writing files"):
-        if isinstance(data, str):
-            print(f"--- 檔案處理失敗: {filename} ---\n{data}\n--------------------")
-        else:
-            output_path = os.path.join(output_dir, filename.replace('layout_', 'formatted_'))
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+    # ✨ 使用 functools.partial 來固定 format_one_file 的 output_dir 參數
+    worker_func = functools.partial(format_one_file, output_dir=output_dir)
 
-    print(f"\n所有資料已成功格式化並儲存至 '{output_dir}'")
+    success_count = 0
+    fail_count = 0
+    
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        # ✨ pool.imap_unordered 現在只回傳輕量的 (filename, status) 元組
+        results = tqdm(pool.imap_unordered(worker_func, json_files), total=len(json_files))
+        
+        # ✨ 處理回傳的狀態，而不是寫入檔案
+        print("\n預處理與寫入已在子行程中同步進行...")
+        for filename, status in results:
+            if status == "Success":
+                success_count += 1
+            else:
+                fail_count += 1
+                print(f"--- 檔案處理失敗: {filename} ---\n{status}\n--------------------")
+
+    print(f"\n處理完成。")
+    print(f"成功: {success_count} 個檔案")
+    print(f"失敗: {fail_count} 個檔案")
+    print(f"所有格式化資料已儲存至 '{output_dir}'")
 
 if __name__ == '__main__':
     main()
