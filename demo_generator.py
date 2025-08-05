@@ -55,19 +55,18 @@ def save_frame(rects, params, title, is_final=False):
         constraints = r.constraints
         component_type = r.component_type
 
-        # 更新後的著色邏輯，帶有優先級
         if 'grouping_id' in constraints:
-            face_color, edge_color = '#E1BEE7', '#6A1B9A' # 紫色系 (階層)
+            face_color, edge_color = '#E1BEE7', '#6A1B9A'
         elif 'symmetry_id' in constraints:
-            face_color, edge_color = '#C8E6C9', '#2E7D32' # 綠色系 (對稱)
+            face_color, edge_color = '#C8E6C9', '#2E7D32'
         elif 'alignment_id' in constraints:
-            face_color, edge_color = '#FFECB3', '#FF8F00' # 橘黃色系 (對齊)
+            face_color, edge_color = '#FFECB3', '#FF8F00'
         elif component_type == 'macro':
-            face_color, edge_color = '#2196F3', '#0D47A1' # 深藍色系 (Macro)
+            face_color, edge_color = '#2196F3', '#0D47A1'
         elif component_type == 'std_cell':
-            face_color, edge_color = '#BBDEFB', '#42A5F5' # 淺藍色系 (Std Cell)
+            face_color, edge_color = '#BBDEFB', '#42A5F5'
         else:
-            face_color, edge_color = '#CFD8DC', '#37474F' # 灰色系
+            face_color, edge_color = '#CFD8DC', '#37474F'
 
         rect_patch = patches.Rectangle((x, y), w, h, linewidth=1.5, edgecolor=edge_color, facecolor=face_color, alpha=0.9)
         ax.add_patch(rect_patch)
@@ -236,7 +235,6 @@ def main():
         max_length_limit=params['MAX_WIRELENGTH_LIMIT'], k_neighbors=params['EDGE_K_NEAREST_NEIGHBORS']
     )
     
-    # 創建一個包含 Pins 和 Edges 的最終畫面
     final_layout_with_nets = final_layout
     save_frame(final_layout_with_nets.rectangles, params, "Final Layout with Pins & Edges", is_final=True)
 

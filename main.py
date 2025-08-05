@@ -1,4 +1,4 @@
-# main.py (已修改為從 config 讀取路徑)
+# main.py
 
 import random
 import numpy as np
@@ -50,11 +50,10 @@ def save_layout_to_json(layout, params, filepath):
 def main():
     config = load_config('config.yaml')
     run_settings = config['run_settings']
-    path_settings = config['path_settings'] # ✨ 新增：讀取路徑設定
+    path_settings = config['path_settings']
     
     num_samples = run_settings['num_samples_to_generate']
     
-    # ✨ 核心修改：使用 config 中定義的 raw_output_directory，而不是硬編碼
     output_dir = path_settings['raw_output_directory']
     os.makedirs(output_dir, exist_ok=True)
     print(f"原始佈局檔案將儲存至: '{output_dir}'")

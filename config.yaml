@@ -1,11 +1,11 @@
-# config.yaml (已更新為明確的 component_types)
+# config.yaml
 
 # ===================================================================
 # Path Settings
 # ===================================================================
 path_settings:
   # main.py 的輸出目錄，存放未經處理的原始佈局檔案
-  raw_output_directory: "raw_layouts_with_constraints"
+  raw_output_directory: "raw_layouts"
   # format_for_ml.py 的輸出目錄，存放格式化後的最終檔案
   ml_ready_output_directory: "dataset_ml_ready"
 
@@ -36,7 +36,7 @@ component_types:
 # Alignment & Symmetry Settings
 # ===================================================================
 alignment_settings:
-  enable: true
+  enable: false
   num_sets:
     type: "randint"
     low: 3
@@ -61,7 +61,7 @@ alignment_settings:
 
 # --- Analog Symmetry Settings ---
 analog_symmetry_settings:
-  enable: true
+  enable: false
   num_groups:
     type: "randint"
     low: 2
@@ -76,7 +76,7 @@ analog_symmetry_settings:
 
 # --- Hierarchical Grouping Settings ---
 grouping_settings:
-  enable: true
+  enable: false
   method: "proximity"
   num_groups_to_create:
     type: "randint"
@@ -108,17 +108,17 @@ base_params:
   PIN_DENSITY_K: 0.01
   EDGE_P_MAX: 0.6
   MAX_WIRELENGTH_LIMIT: 500
-  # 新增: Pin 在邊緣的範圍比例。0.1 表示在離邊緣 10% 的寬度/高度範圍內生成。
+  # Pin 在邊緣的範圍比例。0.1 表示在離邊緣 10% 的寬度/高度範圍內生成。
   PIN_EDGE_MARGIN_RATIO: 0.1
-  # 新增: K-最近鄰的 K 值，控制 Netlist 密度
+  # K-最近鄰的 K 值，控制 Netlist 密度
   EDGE_K_NEAREST_NEIGHBORS: 15
 
 # --- Parameters to Randomize ---
 randomize_params:
   NUM_RECTANGLES:
     type: "randint"
-    low: 80  # 由於 Macro 變大，總數可以減少
-    high: 120
+    low: 230
+    high: 230
   TARGET_DENSITY:
     type: "uniform"
     low: 0.75

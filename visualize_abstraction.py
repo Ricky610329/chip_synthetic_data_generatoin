@@ -7,10 +7,8 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# --- 顏色定義 ---
-# 用於左側「詳細視圖」的鮮豔顏色
 VIVID_COLORS = {
-    'grouping':     {'face': '#E1BEE7', 'edge': '#6A1B9A'},
+    'grouping':     {'face': "#1F1F1F", 'edge': '#6A1B9A'},
     'symmetry':     {'face': '#C8E6C9', 'edge': '#2E7D32'},
     'alignment':    {'face': '#FFECB3', 'edge': '#FF8F00'},
     'macro':        {'face': '#2196F3', 'edge': '#0D47A1'},
@@ -18,14 +16,11 @@ VIVID_COLORS = {
     'default':      {'face': '#CFD8DC', 'edge': '#37474F'}
 }
 
-# 用於右側「抽象視圖」中元件的淡雅顏色
 FADED_COLORS = {
     'grouping':     {'face': '#F3E5F5', 'edge': '#CE93D8'},
     'symmetry':     {'face': '#E8F5E9', 'edge': '#A5D6A7'},
     'alignment':    {'face': '#FFF8E1', 'edge': '#FFD54F'},
-    # ✨ 核心修改: 讓 Macro 在抽象視圖中也使用鮮豔顏色以突顯
     'macro':        {'face': '#2196F3', 'edge': '#0D47A1'},
-    # 保持 Standard Cell 為淡色
     'std_cell':     {'face': '#E3F2FD', 'edge': '#90CAF9'},
     'default':      {'face': '#ECEFF1', 'edge': '#B0BEC5'}
 }
@@ -60,7 +55,6 @@ def draw_rects_and_pins(ax, rects_data, pins, edges, color_palette):
     rect_map = {r['id']: r for r in rects_data}
     pin_map = {p['id']: p for p in pins}
 
-    # 1. 繪製元件
     for r in rects_data:
         colors = get_color_scheme(r, color_palette)
         rect_patch = patches.Rectangle(
@@ -70,7 +64,6 @@ def draw_rects_and_pins(ax, rects_data, pins, edges, color_palette):
         ax.add_patch(rect_patch)
         ax.text(r['x'], r['y'], str(r['id']), ha='center', va='center', fontsize=6, zorder=5)
 
-    # 2. 繪製連線 (灰色)
     for pin1_id, pin2_id in edges:
         pin1, pin2 = pin_map.get(pin1_id), pin_map.get(pin2_id)
         if not pin1 or not pin2: continue
@@ -80,7 +73,6 @@ def draw_rects_and_pins(ax, rects_data, pins, edges, color_palette):
         pos2 = (rect2['x'] + pin2['rel_pos'][0], rect2['y'] + pin2['rel_pos'][1])
         ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], color='gray', alpha=0.5, linewidth=0.6, zorder=3)
 
-    # 3. 繪製引腳 (黑色)
     for pin in pins:
         parent_rect = rect_map.get(pin['parent_rect_id'])
         if parent_rect:
@@ -94,7 +86,6 @@ def draw_abstracted_view(ax, rects_data, pins, edges):
     ax.set_aspect('equal')
     ax.grid(True, linestyle='--', alpha=0.5)
 
-    # --- 1. 繪製抽象節點的虛線邊界框 ---
     processed_rect_ids = set()
     constraint_map = defaultdict(lambda: defaultdict(list))
     for r in rects_data:
@@ -131,7 +122,6 @@ def draw_abstracted_view(ax, rects_data, pins, edges):
             draw_abstract_bbox(unprocessed, VIVID_COLORS['grouping']['edge'])
             processed_rect_ids.update(r['id'] for r in unprocessed)
 
-    # --- 2. 使用更新後的 FADED_COLORS 調色盤繪製底層的元件、引腳和連線 ---
     draw_rects_and_pins(ax, rects_data, pins, edges, FADED_COLORS)
 
 
@@ -150,13 +140,11 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22, 10))
     fig.suptitle("Layout Abstraction Visualization", fontsize=18, y=0.98)
 
-    # 左圖：使用鮮豔顏色繪製詳細佈局
     ax1.set_title("Original Detailed Layout", fontsize=14)
     ax1.set_aspect('equal')
     ax1.grid(True, linestyle='--', alpha=0.5)
     draw_rects_and_pins(ax1, rects, pins, edges, VIVID_COLORS)
     
-    # 右圖：繪製抽象化視圖
     draw_abstracted_view(ax2, rects, pins, edges)
 
     legend_patches = [
