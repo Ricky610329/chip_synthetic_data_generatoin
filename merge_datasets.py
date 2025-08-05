@@ -14,11 +14,9 @@ def merge_datasets(dir1, dir2, output_dir):
         dir2 (str): 第二個資料來源資料夾的路徑。
         output_dir (str): 合併後要儲存的新資料夾路徑。
     """
-    # 1. 建立輸出資料夾
     os.makedirs(output_dir, exist_ok=True)
     print(f"輸出資料夾 '{output_dir}' 已建立。")
 
-    # 2. 獲取兩個來源資料夾中所有的 .json 檔案
     try:
         files1 = sorted([f for f in os.listdir(dir1) if f.startswith('layout_') and f.endswith('.json')])
         files2 = sorted([f for f in os.listdir(dir2) if f.startswith('layout_') and f.endswith('.json')])
@@ -28,19 +26,15 @@ def merge_datasets(dir1, dir2, output_dir):
         print(f"錯誤：找不到指定的資料夾。請檢查路徑是否正確。 {e}")
         return
 
-    # 3. 複製第一個資料夾的檔案
     print(f"\n正在複製來源 A ('{dir1}') 的檔案...")
     for filename in tqdm(files1, desc="複製來源 A"):
         src_path = os.path.join(dir1, filename)
         dst_path = os.path.join(output_dir, filename)
         shutil.copy2(src_path, dst_path)
     
-    # 4. 複製並重新編號第二個資料夾的檔案
-    # 找到目前輸出資料夾中最大的編號，作為重新編號的起點
     current_files_in_output = [f for f in os.listdir(output_dir) if f.startswith('layout_') and f.endswith('.json')]
     start_index = 0
     if current_files_in_output:
-        # 從現有檔案名稱中解析出數字並找到最大值
         indices = [int(f.replace('layout_', '').replace('.json', '')) for f in current_files_in_output]
         start_index = max(indices)
 
@@ -60,7 +54,6 @@ def merge_datasets(dir1, dir2, output_dir):
     print(f"新的資料夾 '{output_dir}' 中總共有 {total_files} 個檔案。")
 
 def main():
-    # 使用 argparse 讓腳本可以從命令列接收參數
     parser = argparse.ArgumentParser(description="Merge two generated layout datasets into one.")
     parser.add_argument("source_dir1", type=str, help="Path to the first source dataset directory.")
     parser.add_argument("source_dir2", type=str, help="Path to the second source dataset directory.")

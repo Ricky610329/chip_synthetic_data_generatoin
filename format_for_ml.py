@@ -1,4 +1,4 @@
-# format_for_ml.py (已修改為從 config 讀取路徑)
+# format_for_ml.py
 
 import json
 import os
@@ -9,7 +9,6 @@ from collections import defaultdict
 import yaml
 import functools
 
-# ✨ 新增：讀取設定檔的輔助函式
 def load_config(path='config.yaml'):
     """載入 YAML 設定檔。"""
     with open(path, 'r', encoding='utf-8') as f:
@@ -124,7 +123,6 @@ def format_one_file(json_path, output_dir):
                     if node1_idx == node2_idx: continue
                     group_edges.append([[node1_idx, node2_idx], [1.0]])
 
-        # 組裝最終要輸出的資料
         result_data = {
             "node": p, "target": target,
             "edges": {
@@ -142,12 +140,10 @@ def format_one_file(json_path, output_dir):
     
     except Exception as e:
         import traceback
-        # ✨ 回傳輕量級的錯誤訊息
         error_message = f"Error: {e}\n{traceback.format_exc()}"
         return filename, error_message
 
 def main():
-    # ✨ 核心修改：移除 argparse，改為從 config.yaml 讀取路徑
     config = load_config()
     path_settings = config['path_settings']
     input_dir = path_settings['raw_output_directory']
@@ -167,17 +163,14 @@ def main():
     json_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.json')]
     
     print(f"\n找到 {len(json_files)} 個原始佈局檔案。開始預處理...")
-    # ✨ 使用 functools.partial 來固定 format_one_file 的 output_dir 參數
     worker_func = functools.partial(format_one_file, output_dir=output_dir)
 
     success_count = 0
     fail_count = 0
     
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        # ✨ pool.imap_unordered 現在只回傳輕量的 (filename, status) 元組
         results = tqdm(pool.imap_unordered(worker_func, json_files), total=len(json_files))
         
-        # ✨ 處理回傳的狀態，而不是寫入檔案
         print("\n預處理與寫入已在子行程中同步進行...")
         for filename, status in results:
             if status == "Success":

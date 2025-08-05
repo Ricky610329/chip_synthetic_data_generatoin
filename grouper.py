@@ -12,12 +12,10 @@ class LayoutGrouper:
 
     def _get_placeable_items(self):
         items = []
-        # 將擁有相同對稱或對齊 ID 的元件視為一個可放置的物件
         grouped_items = defaultdict(list)
         single_rects = []
         
         for r in self.layout.rectangles:
-            # 已經是階層群組的一部分的元件不再參與分組
             if 'grouping_id' in r.constraints:
                 continue
 
